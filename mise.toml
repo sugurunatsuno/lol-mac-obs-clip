@@ -1,0 +1,3 @@
+[tasks.play]
+    run = "python main.py"
+    

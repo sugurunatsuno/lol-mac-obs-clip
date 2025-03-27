@@ -1,3 +1,4 @@
 leagueofevents
 websockets
 pytk
+obs-websocket-py
