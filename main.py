@@ -6,6 +6,9 @@ import websockets
 import json
 import requests
 import sys
+import platform
+import subprocess
+import os
 
 # ===== Live Client API endpoint =====
 EVENT_API_URL = "http://127.0.0.1:2999/liveclientdata/eventdata"
@@ -18,6 +21,34 @@ class EventGUI:
         self.log_box = tk.Text(self.root, width=60, height=20)
         self.log_box.pack()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        # 半透明オーバーレイウィンドウを追加
+        self.overlay = tk.Toplevel(self.root)
+        self.overlay.title("Overlay")
+        self.overlay.overrideredirect(True)
+        self.overlay.geometry("100x100+100+100")
+        self.overlay.attributes("-topmost", True)
+        self.overlay.attributes("-alpha", 0.3)
+
+        btn = tk.Button(self.overlay, text="Clip", command=self.on_overlay_click)
+        btn.pack(expand=True, fill=tk.BOTH)
+
+        # ドラッグ＆ドロップ対応
+        btn.bind("<ButtonPress-1>", self.start_move)
+        btn.bind("<B1-Motion>", self.do_move)
+
+    def start_move(self, event):
+        self._drag_start_x = event.x
+        self._drag_start_y = event.y
+
+    def do_move(self, event):
+        x = self.overlay.winfo_x() + event.x - self._drag_start_x
+        y = self.overlay.winfo_y() + event.y - self._drag_start_y
+        self.overlay.geometry(f"+{x}+{y}")
+
+    def on_overlay_click(self):
+        self.log("🎯 オーバーレイボタンがクリックされました！")
+        asyncio.run(trigger_replay_buffer())
 
     def log(self, message):
         now = datetime.now().strftime("%H:%M:%S")
@@ -46,8 +77,28 @@ async def trigger_replay_buffer():
                 }
             }))
             gui.log("🎬 Replay Buffer 保存リクエストを送信！")
+            play_click_sound()
     except Exception as e:
         gui.log(f"❌ OBSエラー: {e}")
+
+# ===== カシャ音を鳴らす処理 =====
+def play_click_sound():
+    sound_file = "shutter.wav"
+    if not os.path.exists(sound_file):
+        gui.log("⚠️ shutter.wav が見つかりません")
+        return
+
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            subprocess.run(["afplay", sound_file])
+        elif system == "Windows":
+            import winsound
+            winsound.PlaySound(sound_file, winsound.SND_FILENAME)
+        else:
+            subprocess.run(["aplay", sound_file])
+    except Exception as e:
+        gui.log(f"⚠️ サウンド再生エラー: {e}")
 
 # ===== マルチキル検知用ロジック =====
 kill_log = []
@@ -77,7 +128,6 @@ def poll_lol_events():
                 victim = e.get("VictimName", "Unknown")
                 gui.log(f"💥 {killer} が {victim} をキル！")
 
-                # 10秒以内のキルをカウント
                 recent_kills = [t for t in kill_log if now - t < timedelta(seconds=10)]
                 if len(recent_kills) >= 2:
                     gui.log(f"🔥 マルチキル（{len(recent_kills)}連続キル）→ 5秒後に保存予定")
