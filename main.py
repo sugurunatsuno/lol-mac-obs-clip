@@ -37,12 +37,10 @@ obs_ws = None
 
 async def get_obs_connection():
     global obs_ws
-    # obs_wsがNoneか、接続が開いていなければ再接続するよ〜
     if obs_ws is None or not obs_ws.open:
         try:
             obs_ws = await websockets.connect("ws://localhost:4455")
             logger.info("OBSとの接続が確立されたよ〜！")
-            # Identifyメッセージを送信（パスワードが不要の場合は空文字）
             identify_payload = json.dumps({
                 "op": 1,
                 "d": {
@@ -58,7 +56,7 @@ async def get_obs_connection():
             obs_ws = None
     return obs_ws
 
-# ===== OBSのReplay Buffer保存コマンド（持続的な接続を利用） =====
+# ===== OBSのReplay Buffer保存コマンド =====
 async def trigger_replay_buffer():
     ws = await get_obs_connection()
     if ws is None:
@@ -78,7 +76,7 @@ async def trigger_replay_buffer():
     except Exception as e:
         logger.error(f"❌ OBS送信エラー: {e}")
         global obs_ws
-        obs_ws = None  # エラー時は接続をリセットするよ〜
+        obs_ws = None
 
 # ===== カシャ音を鳴らす処理 =====
 def play_click_sound():
@@ -86,13 +84,24 @@ def play_click_sound():
     if not os.path.exists(sound_file):
         logger.warning("⚠️ shutter.mp3 が見つからないよ〜")
         return
-
     try:
-        # afplayの-vオプションで音量を0.3に設定（0.0〜1.0の範囲）
         subprocess.run(["afplay", "-v", "0.3", sound_file])
     except Exception as e:
         logger.warning(f"⚠️ サウンド再生エラー: {e}")
 
+# ===== 設定ファイル読み込み処理 =====
+config = {}
+CONFIG_FILE = "config.json"
+
+def load_config():
+    global config
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        logger.info("設定ファイルを読み込んだよ〜！")
+    except Exception as e:
+        logger.error(f"設定ファイルの読み込みに失敗したよ: {e}")
+        config = {}
 
 # ===== マルチキル検知用ロジック =====
 kill_log = []
@@ -100,9 +109,8 @@ seen_events = set()
 
 def poll_lol_events():
     try:
-        # OpenAPI 3.0仕様に合わせAcceptヘッダーを追加！
         headers = {"Accept": "application/json"}
-        params = {}  # 例: {"eventID": 0}  # 必要なら追加
+        params = {}
         res = requests.get(EVENT_API_URL, headers=headers, params=params, timeout=1.0, verify=False)
         logger.info(f"🔍 LoLイベント取得中...（HTTP {res.status_code}）")
         data = res.json()
@@ -116,6 +124,8 @@ def poll_lol_events():
             seen_events.add(event_id)
 
             event_name = e.get("EventName")
+            
+            # ChampionKill イベント：マルチキル検出
             if event_name == "ChampionKill":
                 now = datetime.now()
                 kill_log.append(now)
@@ -124,68 +134,119 @@ def poll_lol_events():
                 logger.info(f"💥 {killer} が {victim} をキルしたよ〜！")
                 recent_kills = [t for t in kill_log if now - t < timedelta(seconds=10)]
                 if len(recent_kills) >= 2:
-                    logger.info(f"🔥 マルチキル（{len(recent_kills)}連続キル）！5秒後に保存するよ〜")
-                    threading.Timer(5.0, lambda: asyncio.run(trigger_replay_buffer())).start()
+                    if config.get("trigger_events", {}).get("ChampionKill", False):
+                        delay = config.get("replay_delay", 5.0)
+                        logger.info(f"🔥 マルチキル（{len(recent_kills)}連続キル）！{delay}秒後に保存するよ〜")
+                        threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
                     kill_log.clear()
+
             elif event_name == "Multikill":
                 killer = e.get("KillerName", "Unknown")
                 streak = e.get("KillStreak", 0)
                 logger.info(f"🔥 {killer} が {streak}連続キル達成したよ〜！")
+                if config.get("trigger_events", {}).get("Multikill", False):
+                    delay = config.get("replay_delay", 5.0)
+                    logger.info(f"🎬 マルチキルイベントのため、{delay}秒後に保存するよ〜")
+                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+
             elif event_name == "Ace":
                 acer = e.get("Acer", "Unknown")
                 team = e.get("AcingTeam", "Unknown")
                 logger.info(f"🌟 ACE！{acer} による {team} チームの全滅だよ〜！")
+                if config.get("trigger_events", {}).get("Ace", False):
+                    delay = config.get("replay_delay", 5.0)
+                    logger.info(f"🎬 ACEイベントのため、{delay}秒後に保存するよ〜")
+                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+
             elif event_name == "DragonKill":
                 dragon = e.get("DragonType", "Unknown")
                 killer = e.get("KillerName", "Unknown")
                 logger.info(f"🐉 {killer} が {dragon} ドラゴンを討伐したよ〜！")
+                if config.get("trigger_events", {}).get("DragonKill", False):
+                    delay = config.get("replay_delay", 5.0)
+                    logger.info(f"🎬 ドラゴン討伐イベントのため、{delay}秒後に保存するよ〜")
+                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+
             elif event_name == "BaronKill":
                 killer = e.get("KillerName", "Unknown")
                 logger.info(f"👑 {killer} がバロン討伐だよ〜！")
+                if config.get("trigger_events", {}).get("BaronKill", False):
+                    delay = config.get("replay_delay", 5.0)
+                    logger.info(f"🎬 バロン討伐イベントのため、{delay}秒後に保存するよ〜")
+                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+
             elif event_name == "HeraldKill":
                 killer = e.get("KillerName", "Unknown")
                 logger.info(f"📯 {killer} がリフトヘラルド討伐したよ〜！")
+                if config.get("trigger_events", {}).get("HeraldKill", False):
+                    delay = config.get("replay_delay", 5.0)
+                    logger.info(f"🎬 リフトヘラルド討伐イベントのため、{delay}秒後に保存するよ〜")
+                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+
             elif event_name == "TurretKilled":
                 killer = e.get("KillerName", "Unknown")
                 turret = e.get("TurretKilled", "Unknown")
                 logger.info(f"🏰 {killer} がタワー({turret})を破壊したよ〜！")
+                if config.get("trigger_events", {}).get("TurretKilled", False):
+                    delay = config.get("replay_delay", 5.0)
+                    logger.info(f"🎬 タワー破壊イベントのため、{delay}秒後に保存するよ〜")
+                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+
             elif event_name == "InhibKilled":
                 killer = e.get("KillerName", "Unknown")
                 inhib = e.get("InhibKilled", "Unknown")
                 logger.info(f"💣 {killer} がインヒビター({inhib})を破壊したよ〜！")
+                if config.get("trigger_events", {}).get("InhibKilled", False):
+                    delay = config.get("replay_delay", 5.0)
+                    logger.info(f"🎬 インヒビター破壊イベントのため、{delay}秒後に保存するよ〜")
+                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+
             elif event_name == "FirstBrick":
                 killer = e.get("KillerName", "Unknown")
                 logger.info(f"🧱 {killer} が最初のタワー破壊！（ファーストブリック）だよ〜！")
+                if config.get("trigger_events", {}).get("FirstBrick", False):
+                    delay = config.get("replay_delay", 5.0)
+                    logger.info(f"🎬 ファーストブリックイベントのため、{delay}秒後に保存するよ〜")
+                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+
             elif event_name == "GameStart":
                 logger.info("🚩 ゲーム開始だよ〜！")
+                if config.get("trigger_events", {}).get("GameStart", False):
+                    delay = config.get("replay_delay", 5.0)
+                    logger.info(f"🎬 ゲーム開始イベントのため、{delay}秒後に保存するよ〜")
+                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+
             elif event_name == "MinionsSpawning":
                 logger.info("🐾 ミニオンがスポーンしたよ〜！")
+                if config.get("trigger_events", {}).get("MinionsSpawning", False):
+                    delay = config.get("replay_delay", 5.0)
+                    logger.info(f"🎬 ミニオンスポーンイベントのため、{delay}秒後に保存するよ〜")
+                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+
             else:
                 logger.info(f"📌 イベント検出: {event_name}")
+
     except Exception as e:
         logger.error(f"⚠️ LoLイベント取得エラー: {e}")
 
 def create_overlay_button():
-    # メインウィンドウは非表示に
+    # メインウィンドウは非表示にするよ〜
     root = tk.Tk()
     root.withdraw()
 
-    # オーバーレイウィンドウを作成
+    # オーバーレイウィンドウ作成
     overlay = tk.Toplevel()
-    overlay.overrideredirect(False)  # 枠を非表示に
-    overlay.attributes("-topmost", True)  # 常に最前面に
+    overlay.overrideredirect(False)
+    overlay.attributes("-topmost", True)
     overlay.geometry("200x40+100+100")
-
     overlay.attributes("-alpha", 0.2)
-    
-    # Mac専用：ウィンドウがクリックしてもアクティブにならないように設定
     overlay.tk.call("::tk::unsupported::MacWindowStyle", "style", overlay._w, "help", "noActivates")
     
-    # ボタン作成（ボタン自体もフォーカスを受け取らない）
+    # クリックしてもフォーカスを取得しないボタン作成
     button = tk.Button(overlay, text="Clip", takefocus=0, command=lambda: print("Clip triggered!"))
     button.pack(expand=True, fill=tk.BOTH)
 
-    # ドラッグ＆ドロップで移動できるように設定
+    # ドラッグ＆ドロップでウィンドウ移動
     def start_move(event):
         overlay._drag_start_x = event.x
         overlay._drag_start_y = event.y
@@ -197,7 +258,6 @@ def create_overlay_button():
 
     button.bind("<ButtonPress-1>", start_move)
     button.bind("<B1-Motion>", do_move)
-
     overlay.mainloop()
 
 # ===== イベントポーリングループ =====
@@ -211,15 +271,17 @@ def event_loop():
 # ===== main関数 =====
 def main():
     logger.info("アプリケーション開始！")
-
-    # オーバーレイボタンを作成
+    
+    # 設定ファイルを読み込むよ〜
+    load_config()
+    
+    # オーバーレイボタン作成
     create_overlay_button()
 
     # イベントポーリングスレッド開始
     event_thread = threading.Thread(target=event_loop, daemon=True)
     event_thread.start()
     
-    # コマンドラインインターフェースで操作できるようにするよ〜
     logger.info("Enterキーでクリップ保存、'q'で終了。")
     try:
         while True:
@@ -227,7 +289,6 @@ def main():
             if cmd == "q":
                 break
             elif cmd == "":
-                # Enterキーでクリップ保存
                 asyncio.run(trigger_replay_buffer())
             else:
                 logger.info("不明なコマンドだよ〜")

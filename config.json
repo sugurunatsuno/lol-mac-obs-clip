@@ -1,0 +1,17 @@
+{
+    "trigger_events": {
+      "ChampionKill": true,
+      "Multikill": true,
+      "Ace": true,
+      "DragonKill": true,
+      "BaronKill": true,
+      "HeraldKill": true,
+      "TurretKilled": false,
+      "InhibKilled": false,
+      "FirstBrick": false,
+      "GameStart": false,
+      "MinionsSpawning": false
+    },
+    "replay_delay": 5.0
+  }
+  
