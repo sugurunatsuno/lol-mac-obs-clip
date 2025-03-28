@@ -1,3 +1,11 @@
 [tasks.play]
-    run = "python main.py"
-    
+    run = "python src/main.py"
+
+[tasks.dump]
+    run = "python src/dump.py --interval 1"
+
+[tasks.mock-server]
+    run = "python src/dump.py --mock --mock-port 8080"
+
+[tasks.build]
+    run = "pyinstaller --onefile src/main.py --name lol-replay-trigger"
