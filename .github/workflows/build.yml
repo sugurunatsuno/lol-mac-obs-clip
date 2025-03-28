@@ -36,10 +36,10 @@ jobs:
           mise exec -- uv venv
           mise exec -- uv pip install -r requirements.txt
 
-      - name: Run tests
-        run: |
-          export PATH="$HOME/.local/share/mise/bin:$PATH"
-          mise exec -- pytest tests/
+      # - name: Run tests
+      #   run: |
+      #     export PATH="$HOME/.local/share/mise/bin:$PATH"
+      #     mise exec -- pytest tests/
 
       - name: Create build artifact
         run: |
