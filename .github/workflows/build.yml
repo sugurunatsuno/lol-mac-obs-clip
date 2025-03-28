@@ -44,7 +44,9 @@ jobs:
       - name: Create build artifact with PyInstaller
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          mise exec -- pyinstaller --onefile main.py
+          source .venv/bin/activate
+          pyinstaller --onefile main.py
+
 
       - name: Package build as ZIP
         run: |
