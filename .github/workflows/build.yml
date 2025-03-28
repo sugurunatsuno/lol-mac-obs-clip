@@ -21,6 +21,7 @@ jobs:
             curl https://mise.run | sh
             export PATH="$HOME/.local/share/mise/bin:$PATH"
           fi
+          export PATH="$HOME/.local/bin:$PATH"
           mise install uv
 
       - name: Setup Python via mise
