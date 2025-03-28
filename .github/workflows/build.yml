@@ -1,0 +1,68 @@
+name: Build & Tag
+
+on:
+  push:
+    branches: [ main ]
+    tags-ignore: [ "*" ]
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest tests/
+
+      - name: Create build artifact
+        run: |
+          mkdir -p dist
+          cp -r src/* dist/
+
+      - name: Create zip file
+        run: |
+          cd dist
+          zip -r ../build.zip .  # アップロード用のZIPを生成
+          cd ..
+
+      - name: Auto tag (patch version)
+        id: tagger
+        run: |
+          VERSION=$(git tag | sort -V | tail -n 1 | awk -F. '{OFS="."; $3+=1; print $1,$2,$3}')
+          git tag "$VERSION"
+          git push origin "$VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update changelog
+        run: |
+          echo "## ${{ steps.tagger.outputs.version }}" >> CHANGELOG.md
+          git log -1 --pretty=format:"- %s" >> CHANGELOG.md
+          git add CHANGELOG.md
+          git commit -m "update changelog for ${{ steps.tagger.outputs.version }}"
+          git push
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tagger.outputs.version }}
+          name: "Release ${{ steps.tagger.outputs.version }}"
+          body_path: CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload ZIP to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tagger.outputs.version }}
+          files: build.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
