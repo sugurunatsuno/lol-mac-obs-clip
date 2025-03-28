@@ -49,7 +49,6 @@ jobs:
       - name: Package build as ZIP
         run: |
           mkdir -p dist
-          cp dist/main dist/lol-replay-trigger
           cd dist
           zip ../build.zip lol-replay-trigger
           cd ..
