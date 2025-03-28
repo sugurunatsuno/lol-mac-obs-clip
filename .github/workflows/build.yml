@@ -41,15 +41,17 @@ jobs:
       #     export PATH="$HOME/.local/share/mise/bin:$PATH"
       #     mise exec -- pytest tests/
 
-      - name: Create build artifact
+      - name: Create build artifact with PyInstaller
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          mise exec -- pyinstaller --onefile main.py
+
+      - name: Package build as ZIP
         run: |
           mkdir -p dist
-          cp -r src/* dist/
-
-      - name: Create zip file
-        run: |
+          cp dist/main dist/lol-replay-trigger
           cd dist
-          zip -r ../build.zip .
+          zip ../build.zip lol-replay-trigger
           cd ..
 
       - name: Auto tag (patch version)
