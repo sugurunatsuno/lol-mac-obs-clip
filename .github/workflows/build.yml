@@ -10,20 +10,34 @@ on:
 jobs:
   build:
     runs-on: self-hosted
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+      - name: Install mise and uv (if not already)
+        run: |
+          if ! command -v mise &> /dev/null; then
+            curl https://mise.run | sh
+            export PATH="$HOME/.local/share/mise/bin:$PATH"
+          fi
+          mise install uv
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Setup Python via mise
+        run: |
+          export PATH="$HOME/.local/share/mise/bin:$PATH"
+          mise install
+          mise exec -- python --version
+
+      - name: Install dependencies via uv
+        run: |
+          export PATH="$HOME/.local/share/mise/bin:$PATH"
+          mise exec -- uv pip install -r requirements.txt
 
       - name: Run tests
-        run: pytest tests/
+        run: |
+          export PATH="$HOME/.local/share/mise/bin:$PATH"
+          mise exec -- pytest tests/
 
       - name: Create build artifact
         run: |
@@ -33,7 +47,7 @@ jobs:
       - name: Create zip file
         run: |
           cd dist
-          zip -r ../build.zip .  # アップロード用のZIPを生成
+          zip -r ../build.zip .
           cd ..
 
       - name: Auto tag (patch version)
