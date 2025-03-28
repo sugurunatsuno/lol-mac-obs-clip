@@ -107,6 +107,32 @@ def load_config():
         logger.error(f"設定ファイルの読み込みに失敗したよ: {e}")
         config = {}
 
+# ===== ActivePlayerの取得処理 =====
+_active_player_cache: Option[str] = None_()
+_active_player_timestamp: Option[datetime] = None_()
+
+def get_active_player_name() -> Option[str]:
+    global _active_player_cache, _active_player_timestamp
+
+    now = datetime.now()
+    if _active_player_cache.is_some() and _active_player_timestamp.is_some():
+        if now - _active_player_timestamp.unwrap() < timedelta(minutes=1):
+            return _active_player_cache  # ✅ キャッシュが有効！
+
+    try:
+        res = requests.get("https://127.0.0.1:2999/liveclientdata/activeplayer", verify=False, timeout=2)
+        res.raise_for_status()
+        data = res.json()
+        summoner = data["summonerName"]
+        _active_player_cache = Some(summoner)
+        _active_player_timestamp = Some(now)
+        return _active_player_cache
+    except Exception as e:
+        logger.warning(f"⚠️ ActivePlayerの取得に失敗したよ: {e}")
+        return None_()
+
+
+
 # ===== マルチキル検知用ロジック =====
 kill_log = []
 seen_events = set()
@@ -133,25 +159,33 @@ def poll_lol_events():
             if event_name == "ChampionKill":
                 now = datetime.now()
                 kill_log.append(now)
+
                 killer = e.get("KillerName", "Unknown")
                 victim = e.get("VictimName", "Unknown")
                 logger.info(f"💥 {killer} が {victim} をキルしたよ〜！")
-                recent_kills = [t for t in kill_log if now - t < timedelta(seconds=10)]
-                if len(recent_kills) >= 2:
-                    if config.get("trigger_events", {}).get("ChampionKill", False):
-                        delay = config.get("replay_delay", 5.0)
-                        logger.info(f"🔥 マルチキル（{len(recent_kills)}連続キル）！{delay}秒後に保存するよ〜")
-                        threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
-                    kill_log.clear()
+
+                # ActivePlayer名と比較
+                active_name = get_active_player_name()
+                if active_name.is_some() and killer == active_name.unwrap():
+                    recent_kills = [t for t in kill_log if now - t < timedelta(seconds=10)]
+                    if len(recent_kills) >= 2:
+                        if config.get("trigger_events", {}).get("ChampionKill", False):
+                            delay = config.get("replay_delay", 5.0)
+                            logger.info(f"🔥 {len(recent_kills)}連続キル！{delay}秒後に保存するよ〜")
+                            threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+                        kill_log.clear()
+
 
             elif event_name == "Multikill":
                 killer = e.get("KillerName", "Unknown")
                 streak = e.get("KillStreak", 0)
                 logger.info(f"🔥 {killer} が {streak}連続キル達成したよ〜！")
-                if config.get("trigger_events", {}).get("Multikill", False):
-                    delay = config.get("replay_delay", 5.0)
-                    logger.info(f"🎬 マルチキルイベントのため、{delay}秒後に保存するよ〜")
-                    threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+                active_name = get_active_player_name()
+                if active_name.is_some() and killer == active_name.unwrap():
+                    if config.get("trigger_events", {}).get("Multikill", False):
+                        delay = config.get("replay_delay", 5.0)
+                        logger.info(f"🎬 自分のマルチキル！{delay}秒後に保存するよ〜")
+                        threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
 
             elif event_name == "Ace":
                 acer = e.get("Acer", "Unknown")
