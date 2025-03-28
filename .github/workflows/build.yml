@@ -67,14 +67,14 @@ jobs:
           git push origin "$VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-
       - name: Update changelog
         run: |
-          echo "## ${{ steps.tagger.outputs.version }}" >> CHANGELOG.md
+          VERSION="${{ steps.tagger.outputs.version }}"
+          echo "## $VERSION" >> CHANGELOG.md
           git log -1 --pretty=format:"- %s" >> CHANGELOG.md
           git add CHANGELOG.md
-          git commit -m "update changelog for ${{ steps.tagger.outputs.version }}"
-          git push
+          git commit -m "update changelog for $VERSION"
+          git push origin HEAD:refs/heads/master
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
