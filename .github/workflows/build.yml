@@ -29,10 +29,11 @@ jobs:
           export PATH="$HOME/.local/share/mise/bin:$PATH"
           mise install
           mise exec -- python --version
-
-      - name: Install dependencies via uv
+      
+      - name: Create and activate venv via uv
         run: |
-          export PATH="$HOME/.local/share/mise/bin:$PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          mise exec -- uv venv
           mise exec -- uv pip install -r requirements.txt
 
       - name: Run tests
