@@ -11,6 +11,9 @@ import websockets
 import logging
 import tkinter as tk
 
+from utils.option import Option, Some, None_
+from utils.result import Result, Ok, Err
+
 # ===== ログ設定 =====
 logger = logging.getLogger("LoL_Logger")
 logger.setLevel(logging.DEBUG)
@@ -51,6 +54,7 @@ async def get_obs_connection():
             await obs_ws.send(identify_payload)
             response = await obs_ws.recv()
             logger.info(f"OBSからのIdentifyレスポンス: {response}")
+
         except Exception as e:
             logger.error(f"❌ OBS接続またはIdentifyエラー: {e}")
             obs_ws = None
