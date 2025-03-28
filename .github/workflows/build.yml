@@ -2,10 +2,8 @@ name: Build & Tag
 
 on:
   push:
-    branches: [ master ]
-    tags-ignore: [ "*" ]
-  pull_request:
-    branches: [ master ]
+    tags:
+      - "v*.*.*"
 
 jobs:
   build:
@@ -57,6 +55,7 @@ jobs:
           cd ..
 
       - name: Auto tag (patch version)
+        if: startsWith(github.ref, 'refs/heads/')
         id: tagger
         run: |
           LAST_TAG=$(git tag | sort -V | tail -n 1)
