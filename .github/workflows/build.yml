@@ -43,7 +43,7 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           source .venv/bin/activate
-          pyinstaller --onefile main.py
+          pyinstaller --onefile src/main.py --name lol-replay-trigger
 
 
       - name: Package build as ZIP
