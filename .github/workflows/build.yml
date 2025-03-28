@@ -59,10 +59,16 @@ jobs:
       - name: Auto tag (patch version)
         id: tagger
         run: |
-          VERSION=$(git tag | sort -V | tail -n 1 | awk -F. '{OFS="."; $3+=1; print $1,$2,$3}')
+          LAST_TAG=$(git tag | sort -V | tail -n 1)
+          if [ -z "$LAST_TAG" ]; then
+            VERSION="v0.0.1"
+          else
+            VERSION=$(echo "$LAST_TAG" | awk -F. '{OFS="."; $3+=1; print $1,$2,$3}')
+          fi
           git tag "$VERSION"
           git push origin "$VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+
 
       - name: Update changelog
         run: |
