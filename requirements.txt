@@ -2,3 +2,4 @@ leagueofevents
 websockets
 pytk
 obs-websocket-py
+pyinstaller
