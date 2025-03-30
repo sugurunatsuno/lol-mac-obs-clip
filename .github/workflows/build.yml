@@ -70,7 +70,7 @@ jobs:
       - name: Update changelog
         run: |
           TAG_NAME=${{ github.ref_name }}
-          PREV_TAG=$(git tag --sort=creatordate | grep -B1 "$TAG_NAME" | head -n 1)
+          PREV_TAG=$(git tag --sort=creatordate | grep -B1 "$TAG_NAME" | tail -n 1)
       
           TEMP_FILE=$(mktemp)
           HEADER_FILE=$(mktemp)
