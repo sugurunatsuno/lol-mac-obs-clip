@@ -71,24 +71,38 @@ jobs:
         run: |
           TAG_NAME=${{ github.ref_name }}
           PREV_TAG=$(git tag --sort=creatordate | grep -B1 "$TAG_NAME" | head -n 1)
+      
           TEMP_FILE=$(mktemp)
-          echo "## $TAG_NAME" >> $TEMP_FILE
-          if [ -z "$PREV_TAG" ]; then
-            echo "- 初回リリースだよ〜！" >> $TEMP_FILE
-          else
-            git log "$PREV_TAG..$TAG_NAME" --pretty=format:"- %s" >> $TEMP_FILE
-          fi
-          echo "" >> $TEMP_FILE
-          # CHANGELOG.md の先頭に新しいログを挿入
+          HEADER_FILE=$(mktemp)
+          BODY_FILE=$(mktemp)
+      
+          # タイトルだけ保持（最初の1行）
           if [ -f CHANGELOG.md ]; then
-            cat CHANGELOG.md >> $TEMP_FILE
+            head -n 1 CHANGELOG.md > $HEADER_FILE
+            tail -n +2 CHANGELOG.md > $BODY_FILE
+          else
+            echo "# Changelog" > $HEADER_FILE
           fi
-          mv $TEMP_FILE CHANGELOG.md
+      
+          echo "" >> $HEADER_FILE
+          echo "## $TAG_NAME" >> $HEADER_FILE
+      
+          if [ -z "$PREV_TAG" ]; then
+            echo "- 初回リリースだよ〜！" >> $HEADER_FILE
+          else
+            git log "$PREV_TAG..$TAG_NAME" --pretty=format:"- %s" >> $HEADER_FILE
+          fi
+      
+          echo "" >> $HEADER_FILE
+          cat $BODY_FILE >> $HEADER_FILE
+          mv $HEADER_FILE CHANGELOG.md
+      
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add CHANGELOG.md
           git commit -m "update changelog for $TAG_NAME"
           git push origin HEAD:master
+
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
