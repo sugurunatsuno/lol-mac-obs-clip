@@ -176,3 +176,6 @@ cython_debug/
 .idea/
 /dump/
 .DS_Store
+
+# ignore log files
+src/*.log
