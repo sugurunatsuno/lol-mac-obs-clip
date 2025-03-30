@@ -1,6 +1,4 @@
 import requests
-import time
-import threading
 import asyncio
 from typing import Callable, Dict, List, Awaitable
 from utils.logger import logger
@@ -8,8 +6,7 @@ from utils.logger import logger
 EVENT_API_URL = "https://127.0.0.1:2999/liveclientdata/eventdata"
 
 _event_handlers: Dict[str, List[Callable[[dict], Awaitable[None]]]] = {}
-_stop_event = threading.Event()
-
+_stop_event = asyncio.Event()
 
 def register_event_handler(event_name: str, handler: Callable[[dict], Awaitable[None]]) -> None:
     """
@@ -23,16 +20,16 @@ def register_event_handler(event_name: str, handler: Callable[[dict], Awaitable[
         _event_handlers[event_name] = []
     _event_handlers[event_name].append(handler)
 
-
-def poll_events() -> None:
+async def poll_events_async() -> None:
     """
-    LoLのイベントAPIをポーリングし、新しいイベントがあれば登録された非同期ハンドラを呼び出します。
+    LoLのイベントAPIを非同期でポーリングし、新しいイベントがあれば登録された非同期ハンドラを呼び出します。
     """
     last_event_id = -1
 
     while not _stop_event.is_set():
         try:
-            response = requests.get(EVENT_API_URL, verify=False, timeout=2)
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, lambda: requests.get(EVENT_API_URL, verify=False, timeout=2))
             response.raise_for_status()
             events_data = response.json()
 
@@ -46,23 +43,20 @@ def poll_events() -> None:
 
                     for handler in handlers:
                         try:
-                            asyncio.run(handler(event))
+                            asyncio.create_task(handler(event))
                         except Exception as e:
                             logger.error(f"イベント処理中にエラー発生: {e}")
 
         except Exception as e:
             logger.warning(f"イベントポーリング失敗: {e}")
 
-        time.sleep(1)
-
+        await asyncio.sleep(1)
 
 def start_event_loop() -> None:
     """
-    イベントのポーリングをバックグラウンドスレッドで開始します。
+    イベントのポーリングをバックグラウンドタスクで開始します。
     """
-    event_thread = threading.Thread(target=poll_events, daemon=True)
-    event_thread.start()
-
+    asyncio.create_task(poll_events_async())
 
 def stop_event_loop() -> None:
     """

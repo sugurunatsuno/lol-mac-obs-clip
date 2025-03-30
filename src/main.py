@@ -36,6 +36,111 @@ async def handle_multikill(event: dict):
         await asyncio.sleep(delay)
         await trigger_replay_buffer()
 
+async def handle_player_death(event: dict):
+    """
+    プレイヤー死亡イベント時にリプレイ保存をトリガーする非同期ハンドラ。
+
+    Args:
+        event (dict): イベントデータ。
+    """
+    active_player = get_active_player_name()
+    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
+        delay = CONFIG.get("replay_delay", 5.0)
+        logger.info(f"💀 自分が倒されたよ！{delay}秒後にリプレイを保存するね〜")
+        await asyncio.sleep(delay)
+        await trigger_replay_buffer()
+
+async def handle_dragon_steal(event: dict):
+    """
+    ドラゴン奪取イベント時にリプレイ保存をトリガーする非同期ハンドラ。
+
+    Args:
+        event (dict): イベントデータ。
+    """
+    active_player = get_active_player_name()
+    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
+        delay = CONFIG.get("replay_delay", 5.0)
+        logger.info(f"🐉 自分がドラゴンを奪ったよ！{delay}秒後にリプレイを保存するね〜")
+        await asyncio.sleep(delay)
+        await trigger_replay_buffer()
+
+async def handle_grabs_steal(event: dict):
+    """
+    グラブ奪取イベント時にリプレイ保存をトリガーする非同期ハンドラ。
+
+    Args:
+        event (dict): イベントデータ。
+    """
+    active_player = get_active_player_name()
+    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
+        delay = CONFIG.get("replay_delay", 5.0)
+        logger.info(f"🦸 自分がグラブを奪ったよ！{delay}秒後にリプレイを保存するね〜")
+        await asyncio.sleep(delay)
+        await trigger_replay_buffer()
+
+
+async def handle_herald_steal(event: dict):
+    """
+    ヘラルド奪取イベント時にリプレイ保存をトリガーする非同期ハンドラ。
+
+    Args:
+        event (dict): イベントデータ。
+    """
+    active_player = get_active_player_name()
+    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
+        delay = CONFIG.get("replay_delay", 5.0)
+        logger.info(f"🦸 自分がヘラルドを奪ったよ！{delay}秒後にリプレイを保存するね〜")
+        await asyncio.sleep(delay)
+        await trigger_replay_buffer()
+
+async def handle_baron_steal(event: dict):
+    """
+    バロン奪取イベント時にリプレイ保存をトリガーする非同期ハンドラ。
+
+    Args:
+        event (dict): イベントデータ。
+    """
+    active_player = get_active_player_name()
+    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
+        delay = CONFIG.get("replay_delay", 5.0)
+        logger.info(f"🦸 自分がバロンを奪ったよ！{delay}秒後にリプレイを保存するね〜")
+        await asyncio.sleep(delay)
+        await trigger_replay_buffer()
+
+async def handle_ace(event: dict):
+    """
+    エースイベント時にリプレイ保存をトリガーする非同期ハンドラ。
+
+    Args:
+        event (dict): イベントデータ。
+    """
+    active_player = get_active_player_name()
+    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
+        delay = CONFIG.get("replay_delay", 5.0)
+        logger.info(f"💀 自分がエースを決めたよ！{delay}秒後にリプレイを保存するね〜")
+        await asyncio.sleep(delay)
+        await trigger_replay_buffer()
+
+
+async def handle_teambattle(event: dict):
+    """
+    チームバトルイベント時にリプレイ保存をトリガーする非同期ハンドラ。
+    チームバトルはイベントとしては存在しないため、独自に作成しています
+    Args:
+        event (dict): イベントデータ。
+    """
+    # 1. 一定時間内に各チームのチャンピオンが2体以上キルされた場合が条件
+    # 2. その場合、リプレイ保存をトリガーする
+
+    active_player = get_active_player_name()
+    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
+        delay = CONFIG.get("replay_delay", 5.0)
+        logger.info(f"💥 自分がチームバトルをしたよ！{delay}秒後にリプレイを保存するね〜")
+        await asyncio.sleep(delay)
+        await trigger_replay_buffer()
+
+
+
 async def main_async():
     """
     メインの非同期処理。設定を読み込み、イベントハンドラを登録してイベントループを開始します。
@@ -48,10 +153,10 @@ async def main_async():
         CONFIG = load_config()
 
     if CONFIG.get("trigger_events", {}).get("ChampionKill", False):
-        register_event_handler("ChampionKill", lambda e: asyncio.create_task(handle_champion_kill(e)))
+        register_event_handler("ChampionKill", handle_champion_kill)
 
     if CONFIG.get("trigger_events", {}).get("Multikill", False):
-        register_event_handler("Multikill", lambda e: asyncio.create_task(handle_multikill(e)))
+        register_event_handler("Multikill", handle_multikill)
 
     start_event_loop()
 
