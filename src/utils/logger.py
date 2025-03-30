@@ -1,6 +1,6 @@
 import logging
 
-LOG_FILE = "event_log.txt"
+LOG_FILE = "event.log"
 
 logging.basicConfig(
     level=logging.INFO,
