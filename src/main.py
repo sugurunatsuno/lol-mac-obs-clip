@@ -8,21 +8,23 @@ from lol_api.player import get_active_player_name
 
 CONFIG = {}
 
-def handle_champion_kill(event: dict):
+async def handle_champion_kill(event: dict):
     active_player = get_active_player_name()
     if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
         delay = CONFIG.get("replay_delay", 5.0)
         logger.info(f"🔥 自分がチャンピオンを倒したよ！{delay}秒後にリプレイを保存するね〜")
-        threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+        await asyncio.sleep(delay)
+        await trigger_replay_buffer()
 
-def handle_multikill(event: dict):
+async def handle_multikill(event: dict):
     active_player = get_active_player_name()
     if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
         delay = CONFIG.get("replay_delay", 5.0)
         logger.info(f"🎬 自分がマルチキルしたよ！{delay}秒後にリプレイを保存するね〜")
-        threading.Timer(delay, lambda: asyncio.run(trigger_replay_buffer())).start()
+        await asyncio.sleep(delay)
+        await trigger_replay_buffer()
 
-def main():
+async def main_async():
     global CONFIG
 
     CONFIG = load_config()
@@ -31,21 +33,20 @@ def main():
         CONFIG = load_config()
 
     if CONFIG.get("trigger_events", {}).get("ChampionKill", False):
-        register_event_handler("ChampionKill", handle_champion_kill)
+        register_event_handler("ChampionKill", lambda e: asyncio.create_task(handle_champion_kill(e)))
 
     if CONFIG.get("trigger_events", {}).get("Multikill", False):
-        register_event_handler("Multikill", handle_multikill)
+        register_event_handler("Multikill", lambda e: asyncio.create_task(handle_multikill(e)))
 
     start_event_loop()
 
     logger.info("LoL OBS Replay Trigger が起動したよ〜！終了するには Ctrl+C を押してね〜")
 
     try:
-        while True:
-            pass
+        await asyncio.Event().wait()  # 永久待機
     except KeyboardInterrupt:
         logger.info("終了するよ〜")
         stop_event_loop()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main_async())

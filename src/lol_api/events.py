@@ -1,22 +1,23 @@
 import requests
 import time
 import threading
-from typing import Callable, Dict, List
+import asyncio
+from typing import Callable, Dict, List, Awaitable
 from utils.logger import logger
 
 EVENT_API_URL = "https://127.0.0.1:2999/liveclientdata/eventdata"
 
-_event_handlers: Dict[str, List[Callable[[dict], None]]] = {}
+_event_handlers: Dict[str, List[Callable[[dict], Awaitable[None]]]] = {}
 _stop_event = threading.Event()
 
 
-def register_event_handler(event_name: str, handler: Callable[[dict], None]) -> None:
+def register_event_handler(event_name: str, handler: Callable[[dict], Awaitable[None]]) -> None:
     """
-    指定したイベント名に対してハンドラ関数を登録します。
+    指定したイベント名に対して非同期ハンドラ関数を登録します。
 
     Args:
         event_name (str): 登録するイベントの名前。
-        handler (Callable[[dict], None]): イベントが発生したときに呼ばれる関数。
+        handler (Callable[[dict], Awaitable[None]]): 非同期関数。
     """
     if event_name not in _event_handlers:
         _event_handlers[event_name] = []
@@ -25,7 +26,7 @@ def register_event_handler(event_name: str, handler: Callable[[dict], None]) -> 
 
 def poll_events() -> None:
     """
-    LoLのイベントAPIをポーリングし、新しいイベントがあれば登録されたハンドラを呼び出します。
+    LoLのイベントAPIをポーリングし、新しいイベントがあれば登録された非同期ハンドラを呼び出します。
     """
     last_event_id = -1
 
@@ -45,7 +46,7 @@ def poll_events() -> None:
 
                     for handler in handlers:
                         try:
-                            handler(event)
+                            asyncio.run(handler(event))
                         except Exception as e:
                             logger.error(f"イベント処理中にエラー発生: {e}")
 
