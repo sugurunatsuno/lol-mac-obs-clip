@@ -1,4 +1,7 @@
 ## v0.0.8
+
+## v0.0.9
+- もう一回変更
 - Merge branch 'master' of https://github.com/sugurunatsuno/lol-mac-obs-clip
 # Changelog
 
