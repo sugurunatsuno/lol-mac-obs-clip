@@ -8,6 +8,19 @@ from lol_api.player import get_active_player_name
 
 CONFIG = {}
 
+async def trigger_replay(event: dict, delay: float, message: str):
+    """
+    リプレイ保存をトリガーする非同期ハンドラ。
+
+    Args:
+        event (dict): イベントデータ。
+    """
+    active_player = get_active_player_name()
+    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
+        logger.info(f"💥 {message} {delay}秒後にリプレイを保存するね〜")
+        await asyncio.sleep(delay)
+        await trigger_replay_buffer()
+
 async def handle_champion_kill(event: dict):
     """
     チャンピオンキルイベント時にリプレイ保存をトリガーする非同期ハンドラ。
@@ -15,12 +28,7 @@ async def handle_champion_kill(event: dict):
     Args:
         event (dict): イベントデータ。
     """
-    active_player = get_active_player_name()
-    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
-        delay = CONFIG.get("replay_delay", 5.0)
-        logger.info(f"🔥 自分がチャンピオンを倒したよ！{delay}秒後にリプレイを保存するね〜")
-        await asyncio.sleep(delay)
-        await trigger_replay_buffer()
+    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "自分がキルしたよ！")
 
 async def handle_multikill(event: dict):
     """
@@ -29,12 +37,7 @@ async def handle_multikill(event: dict):
     Args:
         event (dict): イベントデータ。
     """
-    active_player = get_active_player_name()
-    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
-        delay = CONFIG.get("replay_delay", 5.0)
-        logger.info(f"🎬 自分がマルチキルしたよ！{delay}秒後にリプレイを保存するね〜")
-        await asyncio.sleep(delay)
-        await trigger_replay_buffer()
+    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "自分がマルチキルしたよ！")
 
 async def handle_player_death(event: dict):
     """
@@ -43,12 +46,7 @@ async def handle_player_death(event: dict):
     Args:
         event (dict): イベントデータ。
     """
-    active_player = get_active_player_name()
-    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
-        delay = CONFIG.get("replay_delay", 5.0)
-        logger.info(f"💀 自分が倒されたよ！{delay}秒後にリプレイを保存するね〜")
-        await asyncio.sleep(delay)
-        await trigger_replay_buffer()
+    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "自分がデスしたよ！")
 
 async def handle_dragon_steal(event: dict):
     """
@@ -57,12 +55,7 @@ async def handle_dragon_steal(event: dict):
     Args:
         event (dict): イベントデータ。
     """
-    active_player = get_active_player_name()
-    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
-        delay = CONFIG.get("replay_delay", 5.0)
-        logger.info(f"🐉 自分がドラゴンを奪ったよ！{delay}秒後にリプレイを保存するね〜")
-        await asyncio.sleep(delay)
-        await trigger_replay_buffer()
+    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
 
 async def handle_grabs_steal(event: dict):
     """
@@ -71,12 +64,7 @@ async def handle_grabs_steal(event: dict):
     Args:
         event (dict): イベントデータ。
     """
-    active_player = get_active_player_name()
-    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
-        delay = CONFIG.get("replay_delay", 5.0)
-        logger.info(f"🦸 自分がグラブを奪ったよ！{delay}秒後にリプレイを保存するね〜")
-        await asyncio.sleep(delay)
-        await trigger_replay_buffer()
+    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
 
 
 async def handle_herald_steal(event: dict):
@@ -86,12 +74,7 @@ async def handle_herald_steal(event: dict):
     Args:
         event (dict): イベントデータ。
     """
-    active_player = get_active_player_name()
-    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
-        delay = CONFIG.get("replay_delay", 5.0)
-        logger.info(f"🦸 自分がヘラルドを奪ったよ！{delay}秒後にリプレイを保存するね〜")
-        await asyncio.sleep(delay)
-        await trigger_replay_buffer()
+    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
 
 async def handle_baron_steal(event: dict):
     """
@@ -100,12 +83,7 @@ async def handle_baron_steal(event: dict):
     Args:
         event (dict): イベントデータ。
     """
-    active_player = get_active_player_name()
-    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
-        delay = CONFIG.get("replay_delay", 5.0)
-        logger.info(f"🦸 自分がバロンを奪ったよ！{delay}秒後にリプレイを保存するね〜")
-        await asyncio.sleep(delay)
-        await trigger_replay_buffer()
+    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
 
 async def handle_ace(event: dict):
     """
@@ -114,12 +92,7 @@ async def handle_ace(event: dict):
     Args:
         event (dict): イベントデータ。
     """
-    active_player = get_active_player_name()
-    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
-        delay = CONFIG.get("replay_delay", 5.0)
-        logger.info(f"💀 自分がエースを決めたよ！{delay}秒後にリプレイを保存するね〜")
-        await asyncio.sleep(delay)
-        await trigger_replay_buffer()
+    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
 
 
 async def handle_teambattle(event: dict):
@@ -132,12 +105,7 @@ async def handle_teambattle(event: dict):
     # 1. 一定時間内に各チームのチャンピオンが2体以上キルされた場合が条件
     # 2. その場合、リプレイ保存をトリガーする
 
-    active_player = get_active_player_name()
-    if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
-        delay = CONFIG.get("replay_delay", 5.0)
-        logger.info(f"💥 自分がチームバトルをしたよ！{delay}秒後にリプレイを保存するね〜")
-        await asyncio.sleep(delay)
-        await trigger_replay_buffer()
+    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
 
 
 
