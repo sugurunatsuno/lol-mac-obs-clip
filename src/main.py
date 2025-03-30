@@ -9,6 +9,12 @@ from lol_api.player import get_active_player_name
 CONFIG = {}
 
 async def handle_champion_kill(event: dict):
+    """
+    チャンピオンキルイベント時にリプレイ保存をトリガーする非同期ハンドラ。
+
+    Args:
+        event (dict): イベントデータ。
+    """
     active_player = get_active_player_name()
     if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
         delay = CONFIG.get("replay_delay", 5.0)
@@ -17,6 +23,12 @@ async def handle_champion_kill(event: dict):
         await trigger_replay_buffer()
 
 async def handle_multikill(event: dict):
+    """
+    マルチキルイベント時にリプレイ保存をトリガーする非同期ハンドラ。
+
+    Args:
+        event (dict): イベントデータ。
+    """
     active_player = get_active_player_name()
     if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
         delay = CONFIG.get("replay_delay", 5.0)
@@ -25,6 +37,9 @@ async def handle_multikill(event: dict):
         await trigger_replay_buffer()
 
 async def main_async():
+    """
+    メインの非同期処理。設定を読み込み、イベントハンドラを登録してイベントループを開始します。
+    """
     global CONFIG
 
     CONFIG = load_config()
