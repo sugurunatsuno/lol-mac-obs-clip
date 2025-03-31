@@ -19,7 +19,7 @@ def test_unwrap_err_raises():
         result.unwrap()
         assert False, "Expected ValueError"
     except ValueError as e:
-        assert str(e) == "Tried to unwrap an Err value"
+        assert str(e) == "ValueError: Called unwrap on Err: nope"
 
 def test_unwrap_or_on_err():
     result = Err("fail")
