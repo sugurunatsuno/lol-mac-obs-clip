@@ -1,64 +1,92 @@
 import requests
-import os
-import json
 import time
+import json
+import zipfile
+import os
+import signal
+import sys
 import argparse
 from datetime import datetime
-from http.server import SimpleHTTPRequestHandler, HTTPServer
-from threading import Thread
+from threading import Event
 
-DUMP_DIR = "dump"
+# Live Client API のベースURLと対象エンドポイント
+API_BASE = "https://127.0.0.1:2999/liveclientdata"
+ENDPOINTS = [
+    "allgamedata",
+    "eventdata",
+    "playerlist",
+    "activeplayer",
+    "activeplayerabilities"
+]
+
+# 出力先ディレクトリ（引数でファイル指定しないとき用）
+DUMP_DIR = "debug_zips"
 os.makedirs(DUMP_DIR, exist_ok=True)
 
-def fetch_and_dump(endpoint: str, name: str) -> str:
-    url = f"https://127.0.0.1:2999/liveclientdata/{endpoint}"
+# メモリ上のバッファと終了イベント
+BUFFER = {ep: [] for ep in ENDPOINTS}
+stop_event = Event()
+
+def poll_once():
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    game_ended = False
+    for ep in ENDPOINTS:
+        try:
+            res = requests.get(f"{API_BASE}/{ep}", timeout=1.0)
+            res.raise_for_status()
+            data = res.json()
+            BUFFER[ep].append((timestamp, data))
+            if ep == "allgamedata":
+                game_ended = data.get("gameData", {}).get("gameEnded", False)
+        except Exception as e:
+            print(f"[ERROR] {ep}: {e}")
+    if game_ended:
+        print("[INFO] ゲーム終了を検知しました。終了処理を行います。")
+        stop_event.set()
+
+def dump_zip(output_path=None):
+    if all(len(entries) == 0 for entries in BUFFER.values()):
+        print("[INFO] バッファ空なので保存スキップ")
+        return
+
+    if output_path is None:
+        now = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = os.path.join(DUMP_DIR, f"dump_{now}.zip")
+
+    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for ep, entries in BUFFER.items():
+            for ts, data in entries:
+                zipf.writestr(f"{ep}/{ts}.json", json.dumps(data, indent=2))
+    print(f"[OK] ZIP保存完了: {output_path}")
+
+    for ep in BUFFER:
+        BUFFER[ep] = []
+
+def handle_exit(output_path=None, *args):
+    print("\n[INFO] 終了検知: 最後のZIP保存処理を開始します")
+    dump_zip(output_path)
+    stop_event.set()
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="LoL LiveClientData ダンパ")
+    parser.add_argument("output", nargs="?", help="保存先ZIPファイル名（省略時は自動）")
+    return parser.parse_args()
+
+def main_loop(output_path=None):
+    start = time.time()
     try:
-        res = requests.get(url, verify=False, timeout=2)
-        res.raise_for_status()
-        data = res.json()
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{name}_{timestamp}.json"
-        filepath = os.path.join(DUMP_DIR, filename)
-
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-
-        print(f"✅ {name} を {filepath} に保存したよ！")
-        return filepath
-    except Exception as e:
-        print(f"❌ {name} の取得に失敗したよ: {e}")
-        return ""
-
-def run_mock_server(port: int):
-    os.chdir(DUMP_DIR)
-    handler = SimpleHTTPRequestHandler
-    server = HTTPServer(("127.0.0.1", port), handler)
-    print(f"🚀 モックサーバ起動中！http://127.0.0.1:{port}/")
-    server.serve_forever()
-
-def main():
-    parser = argparse.ArgumentParser(description="LoL LiveClientDataのダンプツール")
-    parser.add_argument("--interval", type=int, help="繰り返し取得する秒数間隔（省略時は1回だけ）")
-    parser.add_argument("--mock", action="store_true", help="dumpディレクトリをモックサーバとして起動する")
-    parser.add_argument("--mock-port", type=int, default=8080, help="モックサーバのポート番号（デフォルト: 8080）")
-    args = parser.parse_args()
-
-    if args.mock:
-        thread = Thread(target=run_mock_server, args=(args.mock_port,), daemon=True)
-        thread.start()
-
-    try:
-        while True:
-            fetch_and_dump("allgamedata", "allgamedata")
-            fetch_and_dump("eventdata", "eventdata")
-
-            if args.interval:
-                time.sleep(args.interval)
-            else:
-                break
-    except KeyboardInterrupt:
-        print("⏹️ 中断されたよ〜")
+        while not stop_event.is_set():
+            poll_once()
+            time.sleep(1)
+            if time.time() - start >= 10:
+                dump_zip(output_path)
+                start = time.time()
+    finally:
+        handle_exit(output_path)
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    signal.signal(signal.SIGINT, lambda s, f: handle_exit(args.output))
+    signal.signal(signal.SIGTERM, lambda s, f: handle_exit(args.output))
+    print("[INFO] LoLダンプ開始。Ctrl+Cで終了できます")
+    main_loop(args.output)
