@@ -10,22 +10,36 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout source code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Install dependencies
+      - name: Install mise and uv
         run: |
-          python -m pip install --upgrade pip
-          pip install pytest pytest-cov
+          if ! command -v mise &> /dev/null; then
+            curl https://mise.run | sh
+            export PATH="$HOME/.local/share/mise/bin:$PATH"
+          fi
+          export PATH="$HOME/.local/bin:$PATH"
+          mise install uv
+
+      - name: Setup Python via mise
+        run: |
+          export PATH="$HOME/.local/share/mise/bin:$PATH"
+          mise install
+          mise exec -- python --version
+
+      - name: Create and activate venv via uv
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          mise exec -- uv venv
+          mise exec -- uv pip install -r requirements.txt
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=. --cov-report=term --cov-report=html:coverage_html --cov-report=markdown > coverage.md || true
+          export PATH="$HOME/.local/share/mise/bin:$PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          mise exec -- uv pip install pytest pytest-cov pytest-asyncio
+          PYTHONPATH=. mise exec -- uv pytest --cov=. --cov-report=markdown > coverage.md || true
 
       - name: Generate test summary
         run: |
