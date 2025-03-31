@@ -41,7 +41,7 @@ jobs:
           export PATH="$HOME/.local/share/mise/bin:$PATH"
           export PATH="$HOME/.local/bin:$PATH"
           mise exec -- uv pip install pytest pytest-cov pytest-asyncio
-          PYTHONPATH=. mise exec -- python -m pytest --cov=. --cov-report=term > coverage.md || true
+          PYTHONPATH=. mise exec -- uv pip run pytest --cov=. --cov-report=term > coverage.md || true
           mkdir -p wiki
           echo "# 🧪 Test Results" > wiki/TestResults.md
           echo -e "\n_Last updated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')_\n" >> wiki/TestResults.md
