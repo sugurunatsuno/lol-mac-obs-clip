@@ -9,3 +9,7 @@
 
 [tasks.build]
     run = "pyinstaller --onefile src/main.py --name lol-replay-trigger"
+
+[tasks.test]
+    description = "Run tests with coverage"
+    run = "python -m pytest --cov=src --cov-report=term"

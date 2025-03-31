@@ -1,0 +1,57 @@
+name: Run Tests and Update Wiki
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  test:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install mise and uv
+        run: |
+          if ! command -v mise &> /dev/null; then
+            curl https://mise.run | sh
+            export PATH="$HOME/.local/share/mise/bin:$PATH"
+          fi
+          export PATH="$HOME/.local/bin:$PATH"
+          mise install uv
+
+      - name: Setup Python via mise
+        run: |
+          export PATH="$HOME/.local/share/mise/bin:$PATH"
+          mise install
+          mise exec -- python --version
+
+      - name: Create and activate venv via uv
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          mise exec -- uv venv
+          mise exec -- uv pip install -r requirements.txt
+
+      - name: Run tests with coverage to push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PATH="$HOME/.local/share/mise/bin:$PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          mise exec -- uv pip install pytest pytest-cov pytest-asyncio
+          PYTHONPATH=. .venv/bin/python -m pytest --cov=. --cov-report=term > coverage.md || true
+          mkdir -p wiki
+          echo "# 🧪 Test Results" > wiki/TestResults.md
+          echo -e "\n_Last updated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')_\n" >> wiki/TestResults.md
+          echo -e '\n' >> wiki/TestResults.md
+          cat coverage.md >> wiki/TestResults.md
+          git config --global user.email "github-actions@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"
+          git clone https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git wiki_repo
+          cp wiki/TestResults.md wiki_repo/
+          cd wiki_repo
+          git add TestResults.md
+          git commit -m "chore: update test results [CI]" || echo "No changes to commit"
+          git push
