@@ -64,4 +64,4 @@ async def test_dispatch_handles_exception(caplog):
     await dispatcher.dispatch("ErrorEvent", {})
     await asyncio.sleep(0.1)
 
-    assert "エラー発生" in caplog.text
+    assert any("RuntimeError" in r.message for r in caplog.records)
