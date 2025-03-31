@@ -43,6 +43,7 @@ jobs:
 
       - name: Generate test summary
         run: |
+          mkdir -p wiki
           echo "# 🧪 Test Results" > wiki/TestResults.md
           echo "\n_Last updated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')_\n" >> wiki/TestResults.md
           echo '```' >> wiki/TestResults.md
