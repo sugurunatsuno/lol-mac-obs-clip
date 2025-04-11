@@ -21,3 +21,12 @@ file_handler.setFormatter(file_formatter)
 # 追加
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
+
+fileonly_logger = logging.getLogger("lol-replay:fileonly")
+fileonly_logger.setLevel(logging.DEBUG)
+
+fileonly_handler = logging.FileHandler("replay_fileonly.log", encoding="utf-8")
+fileonly_handler.setLevel(logging.DEBUG)
+fileonly_handler.setFormatter(file_formatter)
+
+fileonly_logger.addHandler(fileonly_handler)

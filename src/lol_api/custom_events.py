@@ -4,8 +4,18 @@ from typing import Callable, Dict, List, Awaitable
 from collections import deque
 from utils.logger import logger
 from utils.event_dispatcher import EventDispatcher
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 ALL_GAME_DATA_URL = "https://127.0.0.1:2999/liveclientdata/allgamedata"
+
+def is_lol_client_running() -> bool:
+    try:
+        res = requests.get("https://127.0.0.1:2999/liveclientdata/gamestats", verify=False, timeout=1)
+        return res.status_code == 200
+    except:
+        return False
 
 # 体力変化の割合合計のしきい値（例: 40%）
 HEALTH_CHANGE_THRESHOLD = 0.3
@@ -24,8 +34,26 @@ class CustomEventPoller:
         self._event_handlers.setdefault(event_name, []).append(handler)
 
     async def poll_events_async(self) -> None:
+        last_client_state = None  # ← 最初は未確認状態としておく
+        last_event_id = -1
+        logger.info("🎯 LLEventPollerが起動したよ〜！")
+
+        while not self._stop_event.is_set():
+            is_running = is_lol_client_running()
+
+            # 最初 or 状態変化時にログを出す！
+            if is_running != last_client_state:
+                if not is_running:
+                    logger.debug("LoLクライアントが起動してないみたい、ちょっと待つね〜")
+                else:
+                    logger.info("LoLクライアントを見つけたよ！ポーリング再開するね〜")
+                last_client_state = is_running
+
+            if not is_running:
+                await asyncio.sleep(1)
+                continue
+
         while True:
-            logger.debug("LoLクライアントが起動してるから、イベントAPIをポーリングするよ〜")
             try:
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(None, lambda: requests.get(ALL_GAME_DATA_URL, verify=False, timeout=2))

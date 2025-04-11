@@ -8,6 +8,7 @@ from obs.obs_client import trigger_replay_buffer
 from lol_api.player import get_active_player_name
 from lol_api.events import LLEventPoller
 from lol_api.custom_events import CustomEventPoller
+from lol_api.state import GameStatePoller
 
 CONFIG = {}
 dispatcher = EventDispatcher()
@@ -81,8 +82,10 @@ async def main_async():
 
     poller = LLEventPoller(dispatcher)
     custom_poller = CustomEventPoller(dispatcher)
+    game_state_poller = GameStatePoller(dispatcher)
     asyncio.create_task(poller.poll_events_async())
     asyncio.create_task(custom_poller.poll_events_async())
+    asyncio.create_task(game_state_poller.poll_events_async())
 
     logger.info("LoL OBS Replay Trigger が起動したよ〜！終了するには Ctrl+C を押してね〜")
 
