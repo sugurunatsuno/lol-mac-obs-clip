@@ -90,7 +90,7 @@ jobs:
           if [ -z "$PREV_TAG" ]; then
             echo "- 初回リリースだよ〜！" >> $HEADER_FILE
           else
-            git log "$PREV_TAG..$TAG_NAME" --pretty=format:"- %s" >> $HEADER_FILE
+            git log "$PREV_TAG..HEAD" --pretty=format:"- %s" >> $HEADER_FILE
           fi
       
           echo "" >> $HEADER_FILE
