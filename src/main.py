@@ -7,17 +7,18 @@ from utils.event_types import EventType, CustomEventType
 from obs.obs_client import trigger_replay_buffer
 from lol_api.player import get_active_player_name
 from lol_api.events import LLEventPoller
+from lol_api.custom_events import CustomEventPoller
 
 CONFIG = {}
 dispatcher = EventDispatcher()
 
 async def trigger_replay(event: dict, delay: float, message: str):
     """
-
-    :param event:
-    :param delay:
-    :param message:
-    :return:
+    リプレイを保存するトリガーを発火させる関数
+    :param event: イベントデータ
+    :param delay: リプレイ保存までの遅延時間
+    :param message: リプレイ保存のメッセージ
+    :return: None
     """
     active_player = get_active_player_name()
     if active_player.is_some() and event.get("KillerName") == active_player.unwrap():
@@ -25,32 +26,30 @@ async def trigger_replay(event: dict, delay: float, message: str):
         await asyncio.sleep(delay)
         await trigger_replay_buffer()
 
-async def handle_champion_kill(event: dict):
-    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "自分がキルしたよ！")
+def make_replay_handler(message: str):
+    """
+    リプレイ保存のハンドラを作成する関数
+    :param message: リプレイ保存のメッセージ
+    :return: 非同期ハンドラ関数
+    """
+    async def handler(event: dict):
+        """
+        リプレイ保存のハンドラ
+        :param event: イベントデータ
+        :return: None
+        """
+        await trigger_replay(event, CONFIG.get("replay_delay", 5.0), message)
+    return handler
 
-async def handle_multikill(event: dict):
-    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "自分がマルチキルしたよ！")
-
-async def handle_player_death(event: dict):
-    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "自分がデスしたよ！")
-
-async def handle_dragon_steal(event: dict):
-    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
-
-async def handle_grabs_steal(event: dict):
-    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
-
-async def handle_herald_steal(event: dict):
-    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
-
-async def handle_baron_steal(event: dict):
-    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
-
-async def handle_ace(event: dict):
-    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
-
-async def handle_teambattle(event: dict):
-    await trigger_replay(event, CONFIG.get("replay_delay", 5.0), "")
+handle_champion_kill = make_replay_handler("自分がキルしたよ！")
+handle_multikill = make_replay_handler("自分がマルチキルしたよ！")
+handle_player_death = make_replay_handler("自分がデスしたよ！")
+handle_dragon_steal = make_replay_handler("ドラゴンを盗んだよ！")
+handle_grabs_steal = make_replay_handler("グラブを盗んだよ！")
+handle_herald_steal = make_replay_handler("ヘラルドを盗んだよ！")
+handle_baron_steal = make_replay_handler("バロンを盗んだよ！")
+handle_ace = make_replay_handler("自分がエースしたよ！")
+handle_teambattle = make_replay_handler("集団戦が起きたよ！")
 
 async def main_async():
     global CONFIG
@@ -60,14 +59,30 @@ async def main_async():
         create_default_config()
         CONFIG = load_config()
 
-    if CONFIG.get("trigger_events", {}).get("ChampionKill", False):
-        dispatcher.register(EventType.CHAMPION_KILL, handle_champion_kill)
+    trigger_events = CONFIG.get("trigger_events", {})
+    handlers = {
+        "ChampionKill": (EventType.CHAMPION_KILL, handle_champion_kill),
+        "Multikill": (EventType.MULTIKILL, handle_multikill),
+        "PlayerDeath": (EventType.PLAYER_DEATH, handle_player_death),
+        "DragonSteal": (EventType.DRAGON_STEAL, handle_dragon_steal),
+        "GrabsSteal": (EventType.GRABS_STEAL, handle_grabs_steal),
+        "HeraldSteal": (EventType.HERALD_STEAL, handle_herald_steal),
+        "BaronSteal": (EventType.BARON_STEAL, handle_baron_steal),
+        "Ace": (EventType.ACE, handle_ace),
 
-    if CONFIG.get("trigger_events", {}).get("Multikill", False):
-        dispatcher.register(EventType.MULTIKILL, handle_multikill)
+        # カスタムイベント
+        "Teambattle": (CustomEventType.TEAM_FIGHT, handle_teambattle),
+    }
+
+    for event_name, (event_type, handler) in handlers.items():
+        if trigger_events.get(event_name, False):
+            dispatcher.register(event_type, handler)
+            logger.info(f"イベント '{event_name}' にハンドラを登録したよ〜")
 
     poller = LLEventPoller(dispatcher)
+    custom_poller = CustomEventPoller(dispatcher)
     asyncio.create_task(poller.poll_events_async())
+    asyncio.create_task(custom_poller.poll_events_async())
 
     logger.info("LoL OBS Replay Trigger が起動したよ〜！終了するには Ctrl+C を押してね〜")
 

@@ -13,6 +13,10 @@ class EventType(str, Enum):
     BARON_KILL = "BaronKill"
     GAME_END = "GameEnd"
     PLAYER_DEATH = "ChampionDeath"
+    DRAGON_STEAL = "DragonSteal"
+    GRABS_STEAL = "GrabsSteal"
+    HERALD_STEAL = "HeraldSteal"
+    BARON_STEAL = "BaronSteal"
 
 # 🌟 ライブラリ側で提供するカスタムイベント
 class CustomEventType(str, Enum):

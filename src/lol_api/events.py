@@ -4,6 +4,8 @@ from typing import Callable, Dict, List, Awaitable
 from utils.logger import logger
 from utils.event_types import EventType  # 列挙型をインポート
 from utils.event_dispatcher import EventDispatcher
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 EVENT_API_URL = "https://127.0.0.1:2999/liveclientdata/eventdata"
 
@@ -43,6 +45,8 @@ class LLEventPoller:
                 await asyncio.sleep(1)
                 continue
 
+            # LoLクライアントが起動している場合、イベントAPIをポーリングするよ！
+            logger.debug("LoLクライアントが起動してるから、イベントAPIをポーリングするよ〜")
             try:
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(None, lambda: requests.get(EVENT_API_URL, verify=False, timeout=2))

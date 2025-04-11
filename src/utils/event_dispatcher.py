@@ -27,8 +27,19 @@ class EventDispatcher:
         """
         name = str(event_name)
         handlers = self._handlers.get(name, [])
+        tasks = []
         for handler in handlers:
             try:
-                asyncio.create_task(handler(data))
+                task = asyncio.create_task(handler(data))
+                tasks.append(task)
             except Exception as e:
-                logger.error(f"イベント '{name}' のハンドラ処理中にエラー発生: {e}")
+                logger.error(f"イベント '{name}' の作成中にエラー発生: {e}")
+
+        if tasks:
+            try:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for result in results:
+                    if result is not None:
+                        logger.debug(f"イベント '{name}' の結果: {result}")
+            except Exception as e:
+                logger.error(f"イベント '{name}' の処理中にエラー発生: {e}")
