@@ -40,7 +40,7 @@ jobs:
         run: |
           export PATH="$HOME/.local/share/mise/bin:$PATH"
           export PATH="$HOME/.local/bin:$PATH"
-          mise exec -- uv pip install pytest pytest-cov pytest-asyncio
+          mise exec -- uv pip install pytest pytest-cov pytest-asyncio aiohttp
           PYTHONPATH=. .venv/bin/python -m pytest --cov=. --cov-report=term > coverage.md || true
           mkdir -p wiki
           echo "# 🧪 Test Results" > wiki/TestResults.md

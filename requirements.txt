@@ -1,5 +1,6 @@
 leagueofevents
 websockets
+aiohttp
 pytk
 obs-websocket-py
 pyinstaller
