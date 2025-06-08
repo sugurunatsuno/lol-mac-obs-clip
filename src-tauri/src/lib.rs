@@ -7,10 +7,11 @@ fn greet(name: &str) -> String {
 use tauri::Manager;
 mod lol_events;
 
-#[tauri::command]
-pub fn start_lol_listener(app: tauri::AppHandle) {
+
+pub fn start_lol_listener(app: &tauri::AppHandle) {
+    let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(err) = lol_events::listen_for_events(app).await {
+        if let Err(err) = lol_events::listen_for_events(app_handle).await {
             eprintln!("LoL listener error: {err}");
         }
     });
@@ -24,7 +25,7 @@ pub fn run() {
             start_lol_listener(app.app_handle());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, start_lol_listener])
+        .invoke_handler(tauri::generate_handler![greet])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

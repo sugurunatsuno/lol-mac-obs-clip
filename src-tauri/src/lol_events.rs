@@ -1,6 +1,7 @@
 use std::{fs, path::{Path, PathBuf}, time::Duration};
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
+// use tauri::Manager;
 
 /// Find the League of Legends lockfile on macOS.
 fn find_lockfile() -> Option<PathBuf> {
@@ -50,7 +51,7 @@ pub async fn listen_for_events(app: AppHandle) -> anyhow::Result<()> {
             let phase: String = resp.json().await?;
             if phase != last_phase {
                 last_phase = phase.clone();
-                let _ = app.emit_all("lol-event", phase);
+                let _ = app.emit("lol-event", phase);
             }
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
