@@ -1,8 +1,0 @@
-leagueofevents
-websockets
-pytk
-obs-websocket-py
-pyinstaller
-pytest
-pytest-cov
-pytest-asyncio
