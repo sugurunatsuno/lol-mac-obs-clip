@@ -36,7 +36,11 @@
       <div>
         <button id="btnStart">録画開始</button>
         <button id="btnStop">録画停止</button>
+        <button id="btnReplayStart">リプレイバッファ開始</button>
+        <button id="btnReplayStop">リプレイバッファ停止</button>
+        <button id="btnReplaySave">リプレイバッファ保存</button>
       </div>
+
 
       <script>
         const { invoke } = window.__TAURI__.core;
@@ -57,8 +61,21 @@
         setInterval(updateStatus, 1500);
         updateStatus();
 
-        document.getElementById('btnStart').addEventListener('click', startRecording);
-        document.getElementById('btnStop').addEventListener('click', stopRecording);
+        document.getElementById('btnStart').addEventListener('click', async () => {
+          await invoke('start_recording');
+        });
+        document.getElementById('btnStop').addEventListener('click', async () => {
+          await invoke('stop_recording');
+        });
+        document.getElementById('btnReplayStart').addEventListener('click', async () => {
+          await invoke('start_replay_buffer');
+        });
+        document.getElementById('btnReplayStop').addEventListener('click', async () => {
+          await invoke('stop_replay_buffer');
+        });
+        document.getElementById('btnReplaySave').addEventListener('click', async () => {
+          await invoke('save_replay_buffer');
+        });
 
       </script>
       
