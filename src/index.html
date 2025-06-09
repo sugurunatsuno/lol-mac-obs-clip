@@ -39,6 +39,7 @@
         <button id="btnReplayStart">リプレイバッファ開始</button>
         <button id="btnReplayStop">リプレイバッファ停止</button>
         <button id="btnReplaySave">リプレイバッファ保存</button>
+        <button id="btnGetDir">保存ディレクトリ取得</button>
       </div>
 
 
@@ -77,6 +78,9 @@
           await invoke('save_replay_buffer');
         });
 
+        document.getElementById('btnGetDir').addEventListener('click', async () => {
+          await invoke('get_saved_directory');
+        });
       </script>
       
       <form class="row" id="greet-form">

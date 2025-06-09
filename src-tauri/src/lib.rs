@@ -10,6 +10,8 @@ use tauri::async_runtime::spawn;
 use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
+use reqwest::Client;
+use std::collections::HashSet;
 
 type WsType = WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>;
 
@@ -88,7 +90,7 @@ pub struct EventData {
 }
 
 /// LoLのイベントデータを保持する構造体
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct LolEvent {
   pub EventID: i64,
   pub EventName: String,
@@ -162,19 +164,25 @@ async fn stop_recording(state: tauri::State<'_, AppStatusState>, obs_state: taur
 }
 
 #[tauri::command]
-async fn start_replay_buffer(state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
+async fn start_replay_buffer(_state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
     spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartReplayBuffer"));
     Ok(())
 }
 #[tauri::command]
-async fn stop_replay_buffer(state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
+async fn stop_replay_buffer(_state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
     spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopReplayBuffer"));
     Ok(())
 }
 #[tauri::command]
-async fn save_replay_buffer(state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
+async fn save_replay_buffer(_state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
     spawn(send_obs_command_wrapper(obs_state.0.clone(), "SaveReplayBuffer"));
     Ok(())
+}
+
+#[tauri::command]
+async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
+  spawn(send_obs_command_wrapper(obs_state.0.clone(), "GetRecordDirectory"));
+  Ok(())
 }
 
 
@@ -241,11 +249,25 @@ pub fn run() {
             start_replay_buffer,
             stop_replay_buffer,
             save_replay_buffer,
+            get_saved_directory,
             greet])
         .manage(AppStatusState(status.clone()))
         .manage(ObsWsState(obs_ws_client.clone()))
         .setup(move |_app| {
 
+            // アプリケーション開始時にボリュームの空き容量が20GB以上あるかチェック
+            let free_space = std::fs::metadata("/").map(|m| m.len()).unwrap_or(0);
+            if free_space < 20 * 1024 * 1024 * 1024 {
+                eprintln!("Not enough free space on the disk. At least 20GB is required.");
+                // return Err("Not enough free space".into());
+            }else {
+                println!("Free space check passed: {} bytes available", free_space);
+            }
+
+            // OBS WebSocketクライアントの初期化
+            let obs_ws_client_clone = obs_ws_client.clone();
+
+            // アプリ開始時のスレッド(不要かも)
             thread::spawn(move || {
                 let mut prev_ingame = false;
                 loop {
@@ -278,6 +300,43 @@ pub fn run() {
                     println!("Current status: {:?}", status_clone.lock().unwrap());
                 }
             });
+
+            // LoLのイベントをポーリングして処理するスレッド
+            thread::spawn(move || {
+                poll_lol_events(move |event| {
+                    // イベント名で分岐
+                    match event.EventName.as_str() {
+                        "ChampionKill" => {
+                            // 例：リプレイ保存コマンドを送るなど
+                            let obs_ws_client2 = obs_ws_client_clone.clone();
+                            tauri::async_runtime::spawn(async move {
+                                // 必要ならWrapperに引数追加・構造体変更
+                                let _ = send_obs_command_wrapper(obs_ws_client2, "SaveReplayBuffer").await;
+                            });
+                            println!("ChampionKill event: {:?}", event);
+                        }
+                        "GameStart" => {
+                            // 例：録画開始
+                            let obs_ws_client2 = obs_ws_client_clone.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let _ = send_obs_command_wrapper(obs_ws_client2.clone(), "StartRecord").await;
+                                let _ = send_obs_command_wrapper(obs_ws_client2.clone(), "StartReplayBuffer").await;
+                            });
+                        }
+                        "GameEnd" => {
+                            // 例：録画停止
+                            let obs_ws_client2 = obs_ws_client_clone.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let _ = send_obs_command_wrapper(obs_ws_client2.clone(), "StopRecord").await;
+                                let _ = send_obs_command_wrapper(obs_ws_client2.clone(), "StopReplayBuffer").await;
+                            });
+                        }
+                        // 他のイベントも同様に
+                        _ => {}
+                    }
+                });
+            });
+
             Ok(())
         })
         
@@ -294,3 +353,34 @@ async fn obs_stop_recording() -> Result<(), ()> { Ok(()) }
 async fn obs_start_replay_buffer() -> Result<(), ()> { Ok(()) }
 async fn obs_stop_replay_buffer() -> Result<(), ()> { Ok(()) }
 
+/// LoLのイベントをポーリングしてコールバックを呼び出す
+async fn poll_lol_events<F>(mut callback: F)
+where
+    F: FnMut(LolEvent) + Send + 'static,
+{
+    let client = Client::builder()
+        .danger_accept_invalid_certs(true) // LoLのローカルAPIは自己署名証明書
+        .build()
+        .unwrap();
+    let mut last_event_ids: HashSet<i64> = HashSet::new();
+
+    loop {
+        let resp = client
+            .get("https://127.0.0.1:2999/liveclientdata/allgamedata")
+            .send()
+            .await;
+
+        if let Ok(response) = resp {
+            if let Ok(all_data) = response.json::<AllGameData>().await {
+                for event in all_data.events.Events {
+                    if !last_event_ids.contains(&event.EventID) {
+                        // 新規イベント
+                        callback(event.clone());
+                        last_event_ids.insert(event.EventID);
+                    }
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+}
