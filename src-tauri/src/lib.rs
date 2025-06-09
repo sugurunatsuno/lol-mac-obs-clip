@@ -4,11 +4,71 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::Message;
+use serde_json::json;
+use std::error::Error;
+use futures_util::SinkExt;
 
-#[derive(Deserialize, Debug)]
-struct AllGameData {
+// 非同期関数
+pub async fn obs_send_command(command: &str) -> Result<(), Box<dyn Error>> {
+    let url = "ws://127.0.0.1:4455";
+    let (mut ws_stream, _) = connect_async(url).await?;
 
+    let req = json!({
+        "op": 6,
+        "d": {
+            "requestType": command,
+            "requestId": "tauri-lol-obs-001"
+        }
+    });
+
+    // ws_stream.send(Message::Text(req.to_string().into())).await?;
+    // 必要ならレスポンスも受信可
+    Ok(())
 }
+
+/// 全体のゲームデータを保持する構造体
+#[derive(Deserialize)]
+pub struct AllGameData {
+    pub gameData: GameData,
+    pub events: EventData,
+    pub allPlayers: Vec<Player>,
+  // 必要に応じて追加
+}
+
+/// ゲームの状態を保持する構造体
+#[derive(Deserialize)]
+pub struct GameData {
+  pub gameTime: f64,
+  pub gameMode: String,
+  pub mapName: String,
+}
+
+/// イベントデータを保持する構造体
+#[derive(Deserialize)]
+pub struct EventData {
+  pub Events: Vec<LolEvent>,
+}
+
+/// LoLのイベントデータを保持する構造体
+#[derive(Deserialize)]
+pub struct LolEvent {
+  pub EventID: i64,
+  pub EventName: String,
+  pub EventTime: f64,
+}
+
+/// プレイヤーの情報を保持する構造体
+#[derive(Deserialize)]
+pub struct Player {
+  pub summonerName: String,
+  pub championName: String,
+  pub team: String,
+}
+
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 enum GameState {
