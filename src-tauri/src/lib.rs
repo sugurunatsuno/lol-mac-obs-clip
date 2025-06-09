@@ -2,8 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
-use tokio::sync::broadcast;
 use std::thread;
 use std::time::Duration;
 
@@ -130,8 +128,8 @@ fn poll_lol_ingame() -> bool {
     true
 }
 
-fn obs_start_recording() -> Result<(), ()> { Ok(()) }
-fn obs_stop_recording() -> Result<(), ()> { Ok(()) }
-fn obs_start_replay_buffer() -> Result<(), ()> { Ok(()) }
-fn obs_stop_replay_buffer() -> Result<(), ()> { Ok(()) }
+async fn obs_start_recording() -> Result<(), ()> { Ok(()) }
+async fn obs_stop_recording() -> Result<(), ()> { Ok(()) }
+async fn obs_start_replay_buffer() -> Result<(), ()> { Ok(()) }
+async fn obs_stop_replay_buffer() -> Result<(), ()> { Ok(()) }
 
