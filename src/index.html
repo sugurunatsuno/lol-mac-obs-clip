@@ -29,6 +29,39 @@
       </div>
       <p>Click on the Tauri logo to learn more about the framework</p>
 
+      <div>
+        <span>ゲーム状態: </span><span id="gameState"></span><br>
+        <span>OBS状態: </span><span id="obsState"></span>
+      </div>
+      <div>
+        <button id="btnStart">録画開始</button>
+        <button id="btnStop">録画停止</button>
+      </div>
+
+      <script>
+        const { invoke } = window.__TAURI__.core;
+        async function updateStatus() {
+          const status = await invoke('get_status');
+          document.getElementById('gameState').textContent = status.game_state;
+          document.getElementById('obsState').textContent = status.obs_state;
+        }
+        async function startRecording() {
+          await invoke('start_recording');
+          updateStatus();
+        }
+
+        async function stopRecording() {
+          await invoke('stop_recording');
+          updateStatus();
+        }
+        setInterval(updateStatus, 1500);
+        updateStatus();
+
+        document.getElementById('btnStart').addEventListener('click', startRecording);
+        document.getElementById('btnStop').addEventListener('click', stopRecording);
+
+      </script>
+      
       <form class="row" id="greet-form">
         <input id="greet-input" placeholder="Enter a name..." />
         <button type="submit">Greet</button>
