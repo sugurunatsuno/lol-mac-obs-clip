@@ -255,54 +255,11 @@ pub fn run() {
         .manage(ObsWsState(obs_ws_client.clone()))
         .setup(move |_app| {
 
-            // アプリケーション開始時にボリュームの空き容量が20GB以上あるかチェック
-            let free_space = std::fs::metadata("/").map(|m| m.len()).unwrap_or(0);
-            if free_space < 20 * 1024 * 1024 * 1024 {
-                eprintln!("Not enough free space on the disk. At least 20GB is required.");
-                // return Err("Not enough free space".into());
-            }else {
-                println!("Free space check passed: {} bytes available", free_space);
-            }
-
             // OBS WebSocketクライアントの初期化
             let obs_ws_client_clone = obs_ws_client.clone();
 
-            // アプリ開始時のスレッド(不要かも)
-            thread::spawn(move || {
-                let mut prev_ingame = false;
-                loop {
-                    let ingame = poll_lol_ingame();
-                    let mut lock = status_clone.lock().unwrap();
-
-                    if ingame && !prev_ingame {
-
-                        let _ = obs_start_recording();
-                        let _ = obs_start_replay_buffer();
-
-                        lock.game_state = GameState::InProgress;
-                        lock.obs_state = ObsState::Recording;
-
-                        println!("Game started, recording and replay buffer activated.");
-                    }
-                    else if !ingame && prev_ingame {
-
-                        let _ = obs_stop_recording();
-                        let _ = obs_stop_replay_buffer();
-
-                        lock.game_state = GameState::Finished;
-                        lock.obs_state = ObsState::NotRecording;
-                    }
-
-                    prev_ingame = ingame;
-                    drop(lock);
-                    thread::sleep(Duration::from_secs(1)); 
-                    
-                    println!("Current status: {:?}", status_clone.lock().unwrap());
-                }
-            });
-
             // LoLのイベントをポーリングして処理するスレッド
-            thread::spawn(move || {
+            tauri::async_runtime::spawn(async move {
                 poll_lol_events(move |event| {
                     // イベント名で分岐
                     match event.EventName.as_str() {
@@ -334,7 +291,7 @@ pub fn run() {
                         // 他のイベントも同様に
                         _ => {}
                     }
-                });
+                }).await;
             });
 
             Ok(())
@@ -344,15 +301,6 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-fn poll_lol_ingame() -> bool {
-    true
-}
-
-async fn obs_start_recording() -> Result<(), ()> { Ok(()) }
-async fn obs_stop_recording() -> Result<(), ()> { Ok(()) }
-async fn obs_start_replay_buffer() -> Result<(), ()> { Ok(()) }
-async fn obs_stop_replay_buffer() -> Result<(), ()> { Ok(()) }
-
 /// LoLのイベントをポーリングしてコールバックを呼び出す
 async fn poll_lol_events<F>(mut callback: F)
 where
@@ -360,27 +308,33 @@ where
 {
     let client = Client::builder()
         .danger_accept_invalid_certs(true) // LoLのローカルAPIは自己署名証明書
+        .timeout(Duration::from_secs(1))
         .build()
         .unwrap();
     let mut last_event_ids: HashSet<i64> = HashSet::new();
 
-    loop {
-        let resp = client
-            .get("https://127.0.0.1:2999/liveclientdata/allgamedata")
-            .send()
-            .await;
+    println!("Starting LoL event polling...");
 
-        if let Ok(response) = resp {
-            if let Ok(all_data) = response.json::<AllGameData>().await {
-                for event in all_data.events.Events {
-                    if !last_event_ids.contains(&event.EventID) {
-                        // 新規イベント
-                        callback(event.clone());
-                        last_event_ids.insert(event.EventID);
+    loop {
+        println!("Polling LoL events...");
+
+        match client.get("https://127.0.0.1:2999/liveclientdata/allgamedata").send().await {
+            Ok(response) => {
+                if let Ok(all_data) = response.json::<AllGameData>().await {
+                    for event in all_data.events.Events {
+                        if !last_event_ids.contains(&event.EventID) {
+                            // 新規イベント
+                            callback(event.clone());
+                            last_event_ids.insert(event.EventID);
+                        }
                     }
                 }
             }
+            Err(e) => {
+                eprintln!("Error fetching LoL game data: {}", e);
+            }
         }
+                
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
