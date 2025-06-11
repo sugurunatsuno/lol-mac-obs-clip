@@ -10,84 +10,36 @@
 
   <body>
     <main class="container">
-      <h1>Welcome to Tauri</h1>
+      <h1>LoL イベントトリガー録画アプリ</h1>
 
-      <div class="row">
-        <a href="https://tauri.app" target="_blank">
-          <img src="/assets/tauri.svg" class="logo tauri" alt="Tauri logo" />
-        </a>
-        <a
-          href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"
-          target="_blank"
-        >
-          <img
-            src="/assets/javascript.svg"
-            class="logo vanilla"
-            alt="JavaScript logo"
-          />
-        </a>
+      <div class="status-panel">
+        <div><strong>ゲーム状態:</strong> <span id="gameState"></span></div>
+        <div><strong>OBS状態:</strong> <span id="obsState"></span></div>
       </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
 
-      <div>
-        <span>ゲーム状態: </span><span id="gameState"></span><br>
-        <span>OBS状態: </span><span id="obsState"></span>
-      </div>
-      <div>
+      <div class="button-group">
+        <h2>🎥 録画操作</h2>
         <button id="btnStart">録画開始</button>
         <button id="btnStop">録画停止</button>
-        <button id="btnReplayStart">リプレイバッファ開始</button>
-        <button id="btnReplayStop">リプレイバッファ停止</button>
-        <button id="btnReplaySave">リプレイバッファ保存</button>
-        <button id="btnGetDir">保存ディレクトリ取得</button>
       </div>
 
+      <div class="button-group">
+        <h2>🔁 リプレイバッファ</h2>
+        <button id="btnReplayStart">開始</button>
+        <button id="btnReplayStop">停止</button>
+        <button id="btnReplaySave">保存</button>
+      </div>
 
-      <script>
-        const { invoke } = window.__TAURI__.core;
-        async function updateStatus() {
-          const status = await invoke('get_status');
-          document.getElementById('gameState').textContent = status.game_state;
-          document.getElementById('obsState').textContent = status.obs_state;
-        }
-        async function startRecording() {
-          await invoke('start_recording');
-          updateStatus();
-        }
+      <div class="button-group">
+        <h2>🛠 ユーティリティ</h2>
+        <button id="btnGetDir">保存先を開く</button>
+      </div>
 
-        async function stopRecording() {
-          await invoke('stop_recording');
-          updateStatus();
-        }
-        setInterval(updateStatus, 1500);
-        updateStatus();
-
-        document.getElementById('btnStart').addEventListener('click', async () => {
-          await invoke('start_recording');
-        });
-        document.getElementById('btnStop').addEventListener('click', async () => {
-          await invoke('stop_recording');
-        });
-        document.getElementById('btnReplayStart').addEventListener('click', async () => {
-          await invoke('start_replay_buffer');
-        });
-        document.getElementById('btnReplayStop').addEventListener('click', async () => {
-          await invoke('stop_replay_buffer');
-        });
-        document.getElementById('btnReplaySave').addEventListener('click', async () => {
-          await invoke('save_replay_buffer');
-        });
-
-        document.getElementById('btnGetDir').addEventListener('click', async () => {
-          await invoke('get_saved_directory');
-        });
-      </script>
-      
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
+      <div class="log-container">
+        <h2>📜 ゲームイベントログ</h2>
+        <ul id="eventLog"></ul>
+      </div>
     </main>
+
   </body>
 </html>

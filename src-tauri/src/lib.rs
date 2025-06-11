@@ -289,7 +289,9 @@ pub fn run() {
                             });
                         }
                         // 他のイベントも同様に
-                        _ => {}
+                        _ => {
+                            println!("Unhandled event: {} - {:?}", event.EventName, event);
+                        }
                     }
                 }).await;
             });
@@ -316,7 +318,7 @@ where
     println!("Starting LoL event polling...");
 
     loop {
-        println!("Polling LoL events...");
+        println!("{}: Polling LoL events...", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"));
 
         match client.get("https://127.0.0.1:2999/liveclientdata/allgamedata").send().await {
             Ok(response) => {

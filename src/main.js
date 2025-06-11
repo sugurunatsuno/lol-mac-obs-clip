@@ -16,3 +16,57 @@ window.addEventListener("DOMContentLoaded", () => {
     greet();
   });
 });
+
+window.addEventListener("DOMContentLoaded", () => {
+  // 各ボタンにイベントリスナーを設定
+  document.getElementById('btnStart').addEventListener('click', async () => {
+    await invoke('start_recording');
+    logEvent("🎥 録画を開始しました");
+    updateStatus();
+  });
+
+  document.getElementById('btnStop').addEventListener('click', async () => {
+    await invoke('stop_recording');
+    logEvent("⏹ 録画を停止しました");
+    updateStatus();
+  });
+
+  document.getElementById('btnReplayStart').addEventListener('click', async () => {
+    await invoke('start_replay_buffer');
+    logEvent("🔁 リプレイバッファを開始しました");
+    updateStatus();
+  });
+
+  document.getElementById('btnReplayStop').addEventListener('click', async () => {
+    await invoke('stop_replay_buffer');
+    logEvent("⏸ リプレイバッファを停止しました");
+    updateStatus();
+  });
+
+  document.getElementById('btnReplaySave').addEventListener('click', async () => {
+    await invoke('save_replay_buffer');
+    logEvent("💾 リプレイバッファを保存しました");
+    updateStatus();
+  });
+
+  document.getElementById('btnGetDir').addEventListener('click', async () => {
+    const dir = await invoke('get_saved_directory');
+    logEvent(`📁 保存ディレクトリ: ${dir}`);
+  });
+
+  setInterval(updateStatus, 1500);
+  updateStatus();
+});
+
+async function updateStatus() {
+  const status = await invoke('get_status');
+  document.getElementById('gameState').textContent = status.game_state;
+  document.getElementById('obsState').textContent = status.obs_state;
+}
+
+function logEvent(message) {
+  const log = document.getElementById('eventLog');
+  const entry = document.createElement('li');
+  entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+  log.prepend(entry);
+}

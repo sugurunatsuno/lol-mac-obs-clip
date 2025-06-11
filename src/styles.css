@@ -110,3 +110,41 @@ button {
     background-color: #0f0f0f69;
   }
 }
+
+.status-panel {
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+}
+
+.button-group {
+  margin: 1rem 0;
+}
+
+.button-group h2 {
+  margin-bottom: 0.5rem;
+  font-size: 1.2rem;
+  color: #396cd8;
+}
+
+.log-container {
+  margin-top: 2rem;
+  text-align: left;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  padding: 1rem;
+  border-radius: 8px;
+  background-color: #ffffffcc;
+}
+
+.log-container ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.log-container li {
+  padding: 0.2rem 0;
+  border-bottom: 1px solid #ddd;
+  font-size: 0.95rem;
+}
