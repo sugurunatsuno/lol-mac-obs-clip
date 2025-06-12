@@ -1,17 +1,17 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
-use serde::{Deserialize, Serialize};
+use serde::{ser, Deserialize, Serialize};
+use std::fs::OpenOptions;
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
 use serde_json::json;
-use std::error::Error;
 use tauri::async_runtime::spawn;
 use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use reqwest::Client;
 use std::collections::HashSet;
+use std::io::Write;
 
 type WsType = WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>;
 
@@ -322,7 +322,17 @@ where
 
         match client.get("https://127.0.0.1:2999/liveclientdata/allgamedata").send().await {
             Ok(response) => {
-                if let Ok(all_data) = response.json::<AllGameData>().await {
+                if let Ok(body) = response.text().await {
+                    
+                    let mut file = OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open("lol_events.log")
+                        .unwrap();
+
+                    writeln!(file, "{}", body).unwrap();
+
+                if let Ok(all_data) = serde_json::from_str::<AllGameData>(&body) {
                     for event in all_data.events.Events {
                         if !last_event_ids.contains(&event.EventID) {
                             // 新規イベント
@@ -330,6 +340,9 @@ where
                             last_event_ids.insert(event.EventID);
                         }
                     }
+                }
+                } else {
+                    println!("Failed to read response body");
                 }
             }
             Err(e) => {
