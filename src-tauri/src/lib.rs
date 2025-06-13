@@ -66,44 +66,73 @@ impl ObsWsClient {
     }
 }
 
-/// 全体のゲームデータを保持する構造体
-#[derive(Deserialize)]
+
+/// ルート – ゲーム全体
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AllGameData {
-    pub gameData: GameData,
-    pub events: EventData,
-    pub allPlayers: Vec<Player>,
-  // 必要に応じて追加
+    pub game_data:    GameData,
+    pub events:       EventData,
+    pub all_players:  Vec<Player>,
+    pub active_player: ActivePlayer,      // 追加
 }
 
-/// ゲームの状態を保持する構造体
-#[derive(Deserialize)]
+/// ゲーム内状態
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GameData {
-  pub gameTime: f64,
-  pub gameMode: String,
-  pub mapName: String,
+    pub game_time: f64,
+    pub game_mode: String,
+    pub map_name:  String,
 }
 
-/// イベントデータを保持する構造体
-#[derive(Deserialize)]
+/// 現在操作中プレイヤー
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivePlayer {
+    pub summoner_name: String,
+    pub champion_name: String,
+    pub team:          String,
+    // ほかに取れるキーがあれば追加可
+}
+
+/// イベントラッパ
+#[derive(Debug, Clone, Deserialize)]
 pub struct EventData {
-  pub Events: Vec<LolEvent>,
+    #[serde(rename = "Events")]
+    pub events: Vec<LolEvent>,
 }
 
-/// LoLのイベントデータを保持する構造体
-#[derive(Deserialize, Clone, Debug)]
+/// LoL イベント
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct LolEvent {
-  pub EventID: i64,
-  pub EventName: String,
-  pub EventTime: f64,
+    pub event_id:   i64,
+    pub event_name: String,
+    pub event_time: f64,
+
+    // ここからはイベント種別によって存在したりしなかったり
+    pub killer_name:  Option<String>,
+    pub victim_name:  Option<String>,
+    pub assisters:    Option<Vec<String>>,
+    pub turret_killed:Option<String>,
+    pub inhib_killed: Option<String>,
+    pub dragon_type:  Option<String>,
+    pub stolen:       Option<String>,   // "False"/"True" 文字列なので String で受ける
+    pub kill_streak:  Option<i64>,
+    pub acer:         Option<String>,
+    pub acing_team:   Option<String>,
 }
 
-/// プレイヤーの情報を保持する構造体
-#[derive(Deserialize)]
+/// 全プレイヤー情報
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Player {
-  pub summonerName: String,
-  pub championName: String,
-  pub team: String,
+    pub summoner_name: String,
+    pub champion_name: String,
+    pub team:          String,
 }
+
 
 
 
@@ -260,36 +289,48 @@ pub fn run() {
 
             // LoLのイベントをポーリングして処理するスレッド
             tauri::async_runtime::spawn(async move {
-                poll_lol_events(move |event| {
-                    // イベント名で分岐
-                    match event.EventName.as_str() {
-                        "ChampionKill" => {
-                            // 例：リプレイ保存コマンドを送るなど
-                            let obs_ws_client2 = obs_ws_client_clone.clone();
-                            tauri::async_runtime::spawn(async move {
-                                // 必要ならWrapperに引数追加・構造体変更
-                                let _ = send_obs_command_wrapper(obs_ws_client2, "SaveReplayBuffer").await;
-                            });
-                            println!("ChampionKill event: {:?}", event);
+                // LoLのイベントをポーリング
+                poll_lol_events(move |all_data: AllGameData| {
+                    // ゲーム状態の更新
+                    let mut status = status_clone.lock().unwrap();
+                    if status.game_state == GameState::NotStarted {
+                        status.game_state = GameState::InProgress;
+                    }
+
+                    // 現在操作中のプレイヤー情報をログに出力
+                    println!("Active Player: {} ({})", all_data.active_player.summoner_name, all_data.active_player.champion_name);
+
+                    // イベントごとに処理
+                    for event in all_data.events.events {
+                        match event.event_name.as_str() {
+                            "ChampionKill" => {
+                                println!("{} killed {} (Killer: {}, Victim: {})", event.event_time, event.event_name, event.killer_name.unwrap_or_default(), event.victim_name.unwrap_or_default());
+                            }
+                            "Multikill" => {
+                                // active_player == killer_name の場合、OBSに送信
+                                if all_data.active_player.summoner_name == event.killer_name.as_deref().unwrap_or_default() {
+                                    let obs_client_clone = obs_ws_client_clone.clone();
+
+                                    tauri::async_runtime::spawn(async move {
+                                        if let Err(e) = send_obs_command_wrapper(obs_client_clone, "SaveReplayBuffer").await {
+                                            eprintln!("Failed to send Multikill command to OBS: {}", e);
+                                        } else {
+                                            println!("Sent Multikill command to OBS");
+                                        }
+                                    });
+                                }
+                            
+                            }
+                            "TurretKilled" => {
+                                println!("{} turret killed by {}", event.event_time, event.turret_killed.unwrap_or_default());
+                            }
+                            "DragonKill" => {
+                                println!("{} dragon killed: {} (Stolen: {})", event.event_time, event.dragon_type.as_deref().unwrap_or("Unknown"), event.stolen.as_deref().unwrap_or("False"));
+                            }
+                            _ => {
+                                println!("Unhandled event: {} at {}", event.event_name, event.event_time);
+                            }
                         }
-                        "GameStart" => {
-                            // 例：録画開始
-                            let obs_ws_client2 = obs_ws_client_clone.clone();
-                            tauri::async_runtime::spawn(async move {
-                                let _ = send_obs_command_wrapper(obs_ws_client2.clone(), "StartRecord").await;
-                                let _ = send_obs_command_wrapper(obs_ws_client2.clone(), "StartReplayBuffer").await;
-                            });
-                        }
-                        "GameEnd" => {
-                            // 例：録画停止
-                            let obs_ws_client2 = obs_ws_client_clone.clone();
-                            tauri::async_runtime::spawn(async move {
-                                let _ = send_obs_command_wrapper(obs_ws_client2.clone(), "StopRecord").await;
-                                let _ = send_obs_command_wrapper(obs_ws_client2.clone(), "StopReplayBuffer").await;
-                            });
-                        }
-                        // 他のイベントも同様に
-                        _ => {}
                     }
                 }).await;
             });
@@ -304,7 +345,7 @@ pub fn run() {
 /// LoLのイベントをポーリングしてコールバックを呼び出す
 async fn poll_lol_events<F>(mut callback: F)
 where
-    F: FnMut(LolEvent) + Send + 'static,
+    F: FnMut(AllGameData) + Send + 'static,
 {
     let client = Client::builder()
         .danger_accept_invalid_certs(true) // LoLのローカルAPIは自己署名証明書
@@ -321,33 +362,33 @@ where
         match client.get("https://127.0.0.1:2999/liveclientdata/allgamedata").send().await {
             Ok(response) => {
                 if let Ok(body) = response.text().await {
-                    
-                    let mut file = OpenOptions::new()
-                        .append(true)
-                        .create(true)
-                        .open("lol_events.log")
-                        .unwrap();
 
-                    writeln!(file, "{}", body).unwrap();
+                    if let Ok(all_data) = serde_json::from_str::<AllGameData>(&body){
+                        // 新しいイベントのみを処理
+                        let new_events: Vec<LolEvent> = all_data.clone().events.events.into_iter()
+                            .filter(|event| !last_event_ids.contains(&event.event_id))
+                            .collect();
 
-                if let Ok(all_data) = serde_json::from_str::<AllGameData>(&body) {
-                    for event in all_data.events.Events {
-                        if !last_event_ids.contains(&event.EventID) {
-                            // 新規イベント
-                            callback(event.clone());
-                            last_event_ids.insert(event.EventID);
+                        if !new_events.is_empty() {
+                            // コールバックを呼び出す
+                            callback(all_data.clone());
+
+                            // 新しいイベントIDを記録
+                            for event in &new_events {
+                                last_event_ids.insert(event.event_id);
+                            }
                         }
+                    } else {
+                        eprintln!("Failed to parse AllGameData from response: {}", body);
                     }
-                }
-                } else {
-                    println!("Failed to read response body");
                 }
             }
             Err(e) => {
-                eprintln!("Error fetching LoL game data: {}", e);
+                eprintln!("Error fetching LoL events: {}", e);
             }
         }
-                
+
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
+
