@@ -77,3 +77,13 @@ Once integrated with the Tauri app, the application will spawn this script
 automatically so you can manage the replay buffer from the GUI. Until then you
 can invoke the script manually from the project directory.
 
+### Replay buffer options
+
+When starting the replay buffer from the Tauri application, you can override the
+segment length and capture source:
+
+- `segment_seconds` (`-t`) – duration of each segment in seconds. Defaults to `6`.
+- `source` (`-s`) – `avfoundation` capture source string. Defaults to `"1:none"`.
+
+These values are passed directly to `ffmpeg_replaybuffer.sh` when it is spawned.
+
