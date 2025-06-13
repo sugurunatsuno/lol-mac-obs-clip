@@ -32,19 +32,19 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById('btnReplayStart').addEventListener('click', async () => {
-    await invoke('start_replay_buffer');
+    await invoke('start_ffmpeg_replay');
     logEvent("🔁 リプレイバッファを開始しました");
     updateStatus();
   });
 
   document.getElementById('btnReplayStop').addEventListener('click', async () => {
-    await invoke('stop_replay_buffer');
+    await invoke('stop_ffmpeg_replay');
     logEvent("⏸ リプレイバッファを停止しました");
     updateStatus();
   });
 
   document.getElementById('btnReplaySave').addEventListener('click', async () => {
-    await invoke('save_replay_buffer');
+    await invoke('save_ffmpeg_clip');
     logEvent("💾 リプレイバッファを保存しました");
     updateStatus();
   });
