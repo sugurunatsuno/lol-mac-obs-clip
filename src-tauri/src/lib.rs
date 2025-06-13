@@ -359,8 +359,18 @@ async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state
 }
 
 #[tauri::command]
-async fn start_ffmpeg_replay(state: tauri::State<'_, FfmpegState>) -> Result<(), String> {
+async fn start_ffmpeg_replay(
+    state: tauri::State<'_, FfmpegState>,
+    segment_seconds: Option<u32>,
+    source: Option<String>,
+) -> Result<(), String> {
     let mut proc = state.0.lock().unwrap();
+    if let Some(sec) = segment_seconds {
+        proc.set_segment_seconds(sec);
+    }
+    if let Some(src) = source {
+        proc.set_source(src);
+    }
     proc.start().await
 }
 
@@ -380,13 +390,28 @@ async fn save_ffmpeg_clip(state: tauri::State<'_, FfmpegState>) -> Result<(), St
 type SharedObsWsClient = Arc<Mutex<Option<ObsWsClient>>>;
 struct ObsWsState(SharedObsWsClient);
 
+
 struct FfmpegProcess {
     child: Option<Child>,
+    segment_seconds: u32,
+    source: String,
 }
 
 impl FfmpegProcess {
     fn new() -> Self {
-        Self { child: None }
+        Self {
+            child: None,
+            segment_seconds: 6,
+            source: "1:none".into(),
+        }
+    }
+
+    fn set_segment_seconds(&mut self, secs: u32) {
+        self.segment_seconds = secs;
+    }
+
+    fn set_source(&mut self, src: String) {
+        self.source = src;
     }
 
     async fn start(&mut self) -> Result<(), String> {
@@ -395,6 +420,10 @@ impl FfmpegProcess {
         }
         let child = Command::new("sh")
             .arg("./ffmpeg_replaybuffer.sh")
+            .arg("-t")
+            .arg(self.segment_seconds.to_string())
+            .arg("-s")
+            .arg(&self.source)
             .stdin(std::process::Stdio::piped())
             .spawn()
             .map_err(|e| e.to_string())?;

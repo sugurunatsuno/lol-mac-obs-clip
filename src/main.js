@@ -32,7 +32,9 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById('btnReplayStart').addEventListener('click', async () => {
-    await invoke('start_ffmpeg_replay');
+    const segmentSeconds = parseInt(document.getElementById('segmentSeconds').value, 10);
+    const source = document.getElementById('sourceInput').value;
+    await invoke('start_ffmpeg_replay', { segmentSeconds, source });
     logEvent("🔁 リプレイバッファを開始しました");
     updateStatus();
   });
