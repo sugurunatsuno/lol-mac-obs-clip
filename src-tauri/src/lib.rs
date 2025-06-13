@@ -362,14 +362,22 @@ async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state
 async fn start_ffmpeg_replay(
     state: tauri::State<'_, FfmpegState>,
     segment_seconds: Option<u32>,
-    source: Option<String>,
+    video_source: Option<String>,
+    audio_source: Option<String>,
+    fps: Option<u32>,
 ) -> Result<(), String> {
     let mut proc = state.0.lock().unwrap();
     if let Some(sec) = segment_seconds {
         proc.set_segment_seconds(sec);
     }
-    if let Some(src) = source {
-        proc.set_source(src);
+    if let Some(v) = video_source {
+        proc.set_video_source(v);
+    }
+    if let Some(a) = audio_source {
+        proc.set_audio_source(a);
+    }
+    if let Some(f) = fps {
+        proc.set_fps(f);
     }
     proc.start().await
 }
@@ -394,7 +402,9 @@ struct ObsWsState(SharedObsWsClient);
 struct FfmpegProcess {
     child: Option<Child>,
     segment_seconds: u32,
-    source: String,
+    video_source: String,
+    audio_source: String,
+    fps: u32,
 }
 
 impl FfmpegProcess {
@@ -402,7 +412,9 @@ impl FfmpegProcess {
         Self {
             child: None,
             segment_seconds: 6,
-            source: "1:none".into(),
+            video_source: "1".into(),
+            audio_source: "none".into(),
+            fps: 30,
         }
     }
 
@@ -410,8 +422,16 @@ impl FfmpegProcess {
         self.segment_seconds = secs;
     }
 
-    fn set_source(&mut self, src: String) {
-        self.source = src;
+    fn set_video_source(&mut self, src: String) {
+        self.video_source = src;
+    }
+
+    fn set_audio_source(&mut self, src: String) {
+        self.audio_source = src;
+    }
+
+    fn set_fps(&mut self, fps: u32) {
+        self.fps = fps;
     }
 
     async fn start(&mut self) -> Result<(), String> {
@@ -422,8 +442,10 @@ impl FfmpegProcess {
             .arg("./ffmpeg_replaybuffer.sh")
             .arg("-t")
             .arg(self.segment_seconds.to_string())
+            .arg("-f")
+            .arg(self.fps.to_string())
             .arg("-s")
-            .arg(&self.source)
+            .arg(format!("{}:{}", self.video_source, self.audio_source))
             .stdin(std::process::Stdio::piped())
             .spawn()
             .map_err(|e| e.to_string())?;
