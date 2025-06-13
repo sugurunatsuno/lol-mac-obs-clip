@@ -8,6 +8,9 @@ use tauri::async_runtime::spawn;
 use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
+use tokio::process::{Child, Command};
+use std::process::Stdio;
+use tokio::io::AsyncWriteExt;
 use reqwest::Client;
 use std::collections::HashSet;
 
@@ -355,9 +358,70 @@ async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state
   Ok(())
 }
 
+#[tauri::command]
+async fn start_ffmpeg_replay(state: tauri::State<'_, FfmpegState>) -> Result<(), String> {
+    let mut proc = state.0.lock().unwrap();
+    proc.start().await
+}
+
+#[tauri::command]
+async fn stop_ffmpeg_replay(state: tauri::State<'_, FfmpegState>) -> Result<(), String> {
+    let mut proc = state.0.lock().unwrap();
+    proc.stop().await
+}
+
+#[tauri::command]
+async fn save_ffmpeg_clip(state: tauri::State<'_, FfmpegState>) -> Result<(), String> {
+    let mut proc = state.0.lock().unwrap();
+    proc.save().await
+}
+
 
 type SharedObsWsClient = Arc<Mutex<Option<ObsWsClient>>>;
 struct ObsWsState(SharedObsWsClient);
+
+struct FfmpegProcess {
+    child: Option<Child>,
+}
+
+impl FfmpegProcess {
+    fn new() -> Self {
+        Self { child: None }
+    }
+
+    async fn start(&mut self) -> Result<(), String> {
+        if self.child.is_some() {
+            return Ok(());
+        }
+        let child = Command::new("sh")
+            .arg("./ffmpeg_replaybuffer.sh")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        self.child = Some(child);
+        Ok(())
+    }
+
+    async fn stop(&mut self) -> Result<(), String> {
+        if let Some(mut child) = self.child.take() {
+            child.kill().await.map_err(|e| e.to_string())?;
+            let _ = child.wait().await;
+        }
+        Ok(())
+    }
+
+    async fn save(&mut self) -> Result<(), String> {
+        if let Some(child) = &mut self.child {
+            if let Some(stdin) = child.stdin.as_mut() {
+                stdin.write_all(b"s").await.map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    }
+}
+
+type SharedFfmpegProcess = Arc<Mutex<FfmpegProcess>>;
+struct FfmpegState(SharedFfmpegProcess);
 
 // 初回コマンド送信時
 async fn send_obs_command_wrapper(shared: SharedObsWsClient, command: &str) -> Result<(), String> {
@@ -420,9 +484,13 @@ pub fn run() {
             stop_replay_buffer,
             save_replay_buffer,
             get_saved_directory,
+            start_ffmpeg_replay,
+            stop_ffmpeg_replay,
+            save_ffmpeg_clip,
             greet])
         .manage(AppStatusState(status.clone()))
         .manage(ObsWsState(obs_ws_client.clone()))
+        .manage(FfmpegState(Arc::new(Mutex::new(FfmpegProcess::new()))))
         .setup(move |_app| {
 
             // OBS WebSocketクライアントの初期化
