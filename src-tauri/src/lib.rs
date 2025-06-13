@@ -1,7 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
-use serde::{ser, Deserialize, Serialize};
-use std::fs::OpenOptions;
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use serde_json::json;
@@ -11,7 +10,6 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use reqwest::Client;
 use std::collections::HashSet;
-use std::io::Write;
 
 type WsType = WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>;
 
@@ -67,75 +65,218 @@ impl ObsWsClient {
 }
 
 
-/// ルート – ゲーム全体
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize, Clone)]
 pub struct AllGameData {
-    pub game_data:    GameData,
-    pub events:       EventData,
-    pub all_players:  Vec<Player>,
-    pub active_player: ActivePlayer,      // 追加
+    pub activePlayer: ActivePlayer,
+    pub allPlayers: Vec<Player>,
+    pub events: EventData,
+    pub gameData: GameData,
 }
 
-/// ゲーム内状態
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GameData {
-    pub game_time: f64,
-    pub game_mode: String,
-    pub map_name:  String,
-}
-
-/// 現在操作中プレイヤー
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize, Clone)]
 pub struct ActivePlayer {
-    pub summoner_name: String,
-    pub champion_name: String,
-    pub team:          String,
-    // ほかに取れるキーがあれば追加可
+    pub abilities: Abilities,
+    pub championStats: ChampionStats,
+    pub currentGold: f64,
+    pub fullRunes: FullRunes,
+    pub level: u32,
+    pub riotId: String,
+    pub riotIdGameName: String,
+    pub riotIdTagLine: String,
+    pub summonerName: String,
+    pub teamRelativeColors: bool,
 }
 
-/// イベントラッパ
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
+pub struct Abilities {
+    #[serde(rename = "Q")]
+    pub q: Option<Ability>,
+    #[serde(rename = "W")]
+    pub w: Option<Ability>,
+    #[serde(rename = "E")]
+    pub e: Option<Ability>,
+    #[serde(rename = "R")]
+    pub r: Option<Ability>,
+    #[serde(rename = "Passive")]
+    pub passive: Option<Ability>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Ability {
+    #[serde(default)]
+    pub abilityLevel: Option<u32>,
+    pub displayName: String,
+    pub id: String,
+    pub rawDescription: String,
+    pub rawDisplayName: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ChampionStats {
+    pub abilityHaste: f64,
+    pub abilityPower: f64,
+    pub armor: f64,
+    pub armorPenetrationFlat: f64,
+    pub armorPenetrationPercent: f64,
+    pub attackDamage: f64,
+    pub attackRange: f64,
+    pub attackSpeed: f64,
+    pub bonusArmorPenetrationPercent: f64,
+    pub bonusMagicPenetrationPercent: f64,
+    pub critChance: f64,
+    pub critDamage: f64,
+    pub currentHealth: f64,
+    pub healShieldPower: f64,
+    pub healthRegenRate: f64,
+    pub lifeSteal: f64,
+    pub magicLethality: f64,
+    pub magicPenetrationFlat: f64,
+    pub magicPenetrationPercent: f64,
+    pub magicResist: f64,
+    pub maxHealth: f64,
+    pub moveSpeed: f64,
+    pub omnivamp: f64,
+    pub physicalLethality: f64,
+    pub physicalVamp: f64,
+    pub resourceMax: f64,
+    pub resourceRegenRate: f64,
+    pub resourceType: String,
+    pub resourceValue: f64,
+    pub spellVamp: f64,
+    pub tenacity: f64,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct FullRunes {
+    pub generalRunes: Vec<Rune>,
+    pub keystone: Rune,
+    pub primaryRuneTree: RuneTree,
+    pub secondaryRuneTree: RuneTree,
+    pub statRunes: Vec<StatRune>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Rune {
+    pub displayName: String,
+    pub id: u32,
+    pub rawDescription: String,
+    pub rawDisplayName: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct RuneTree {
+    pub displayName: String,
+    pub id: u32,
+    pub rawDescription: String,
+    pub rawDisplayName: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct StatRune {
+    pub id: u32,
+    pub rawDescription: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Player {
+    pub championName: String,
+    pub isBot: bool,
+    pub isDead: bool,
+    pub items: Vec<Item>,
+    pub level: u32,
+    pub position: String,
+    pub rawChampionName: String,
+    pub rawSkinName: String,
+    pub respawnTimer: f64,
+    pub riotId: String,
+    pub riotIdGameName: String,
+    pub riotIdTagLine: String,
+    pub runes: PlayerRunes,
+    pub scores: Scores,
+    pub skinID: i32,
+    pub skinName: String,
+    pub summonerName: String,
+    pub summonerSpells: SummonerSpells,
+    pub team: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Item {
+    pub canUse: bool,
+    pub consumable: bool,
+    pub count: u32,
+    pub displayName: String,
+    pub itemID: i32,
+    pub price: u32,
+    pub rawDescription: String,
+    pub rawDisplayName: String,
+    pub slot: u32,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct PlayerRunes {
+    pub keystone: Rune,
+    pub primaryRuneTree: RuneTree,
+    pub secondaryRuneTree: RuneTree,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Scores {
+    pub assists: u32,
+    pub creepScore: u32,
+    pub deaths: u32,
+    pub kills: u32,
+    pub wardScore: f64,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct SummonerSpells {
+    pub summonerSpellOne: SummonerSpell,
+    pub summonerSpellTwo: SummonerSpell,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct SummonerSpell {
+    pub displayName: String,
+    pub rawDescription: String,
+    pub rawDisplayName: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct EventData {
     #[serde(rename = "Events")]
     pub events: Vec<LolEvent>,
 }
 
-/// LoL イベント
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Debug, Deserialize, Clone)]
 pub struct LolEvent {
-    pub event_id:   i64,
-    pub event_name: String,
-    pub event_time: f64,
+    pub EventID: i64,
+    pub EventName: String,
+    pub EventTime: f64,
 
-    // ここからはイベント種別によって存在したりしなかったり
-    pub killer_name:  Option<String>,
-    pub victim_name:  Option<String>,
-    pub assisters:    Option<Vec<String>>,
-    pub turret_killed:Option<String>,
-    pub inhib_killed: Option<String>,
-    pub dragon_type:  Option<String>,
-    pub stolen:       Option<String>,   // "False"/"True" 文字列なので String で受ける
-    pub kill_streak:  Option<i64>,
-    pub acer:         Option<String>,
-    pub acing_team:   Option<String>,
+    // オプションなフィールドが多い！
+    pub Assisters: Option<Vec<String>>,
+    pub KillerName: Option<String>,
+    pub VictimName: Option<String>,
+    pub KillStreak: Option<u32>,
+    pub Recipient: Option<String>,
+    pub Result: Option<String>,
 }
 
-/// 全プレイヤー情報
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Player {
-    pub summoner_name: String,
-    pub champion_name: String,
-    pub team:          String,
+#[derive(Debug, Deserialize, Clone)]
+pub struct GameData {
+    pub gameMode: String,
+    pub gameTime: f64,
+    pub mapName: String,
+    pub mapNumber: i32,
+    pub mapTerrain: String,
 }
 
 
 
 
+
+// OBS WebSocketの状態
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 enum GameState {
@@ -290,7 +431,7 @@ pub fn run() {
             // LoLのイベントをポーリングして処理するスレッド
             tauri::async_runtime::spawn(async move {
                 // LoLのイベントをポーリング
-                poll_lol_events(move |all_data: AllGameData| {
+                poll_lol_events(move |all_data: &AllGameData, new_events: Vec<LolEvent>| {
                     // ゲーム状態の更新
                     let mut status = status_clone.lock().unwrap();
                     if status.game_state == GameState::NotStarted {
@@ -298,17 +439,20 @@ pub fn run() {
                     }
 
                     // 現在操作中のプレイヤー情報をログに出力
-                    println!("Active Player: {} ({})", all_data.active_player.summoner_name, all_data.active_player.champion_name);
+                    // println!("Active Player: {} ({})", all_data.active_player.summoner_name, all_data.active_player.champion_name);
 
-                    // イベントごとに処理
-                    for event in all_data.events.events {
-                        match event.event_name.as_str() {
+                    // 新しいイベントを処理
+                    for event in new_events {
+                        match event.EventName.as_str() {
                             "ChampionKill" => {
-                                println!("{} killed {} (Killer: {}, Victim: {})", event.event_time, event.event_name, event.killer_name.unwrap_or_default(), event.victim_name.unwrap_or_default());
+                                println!("{} champion killed: {} by {}", event.EventTime, event.VictimName.as_deref().unwrap_or("Unknown"), event.KillerName.as_deref().unwrap_or("Unknown"));
                             }
                             "Multikill" => {
                                 // active_player == killer_name の場合、OBSに送信
-                                if all_data.active_player.summoner_name == event.killer_name.as_deref().unwrap_or_default() {
+                                if let Some(killer_name) = &event.KillerName {
+                                    if killer_name.contains(all_data.activePlayer.summonerName.as_str()) {
+                                        continue; // 自分以外のマルチキルは無視
+                                    }
                                     let obs_client_clone = obs_ws_client_clone.clone();
 
                                     tauri::async_runtime::spawn(async move {
@@ -322,13 +466,14 @@ pub fn run() {
                             
                             }
                             "TurretKilled" => {
-                                println!("{} turret killed by {}", event.event_time, event.turret_killed.unwrap_or_default());
+                                
                             }
                             "DragonKill" => {
-                                println!("{} dragon killed: {} (Stolen: {})", event.event_time, event.dragon_type.as_deref().unwrap_or("Unknown"), event.stolen.as_deref().unwrap_or("False"));
+                                
                             }
                             _ => {
-                                println!("Unhandled event: {} at {}", event.event_name, event.event_time);
+                                // 他のイベントは無視
+                                println!("Unhandled event: {} at {}", event.EventName, event.EventTime);
                             }
                         }
                     }
@@ -345,7 +490,7 @@ pub fn run() {
 /// LoLのイベントをポーリングしてコールバックを呼び出す
 async fn poll_lol_events<F>(mut callback: F)
 where
-    F: FnMut(AllGameData) + Send + 'static,
+    F: FnMut(&AllGameData, Vec<LolEvent>) + Send + 'static,
 {
     let client = Client::builder()
         .danger_accept_invalid_certs(true) // LoLのローカルAPIは自己署名証明書
@@ -357,29 +502,28 @@ where
     println!("Starting LoL event polling...");
 
     loop {
-        println!("Polling LoL events...");
 
         match client.get("https://127.0.0.1:2999/liveclientdata/allgamedata").send().await {
             Ok(response) => {
                 if let Ok(body) = response.text().await {
-
                     if let Ok(all_data) = serde_json::from_str::<AllGameData>(&body){
                         // 新しいイベントのみを処理
                         let new_events: Vec<LolEvent> = all_data.clone().events.events.into_iter()
-                            .filter(|event| !last_event_ids.contains(&event.event_id))
+                            .filter(|event| !last_event_ids.contains(&event.EventID))
                             .collect();
 
                         if !new_events.is_empty() {
                             // コールバックを呼び出す
-                            callback(all_data.clone());
+                            println!("New events detected: {}", new_events.len());
+                            callback(&all_data, new_events.clone());
 
                             // 新しいイベントIDを記録
                             for event in &new_events {
-                                last_event_ids.insert(event.event_id);
+                                last_event_ids.insert(event.EventID);
                             }
                         }
                     } else {
-                        eprintln!("Failed to parse AllGameData from response: {}", body);
+                        eprintln!("Failed to parse AllGameData from response:");
                     }
                 }
             }
