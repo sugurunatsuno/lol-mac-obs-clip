@@ -11,6 +11,8 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio::process::{Child, Command};
 use std::process::Stdio;
+use nix::sys::signal::{kill, Signal::SIGTERM};
+use nix::unistd::Pid;
 use tokio::io::AsyncWriteExt;
 use reqwest::Client;
 use std::collections::HashSet;
@@ -660,7 +662,17 @@ impl FfmpegProcess {
 
     async fn stop(&mut self) -> Result<(), String> {
         if let Some(mut child) = self.child.take() {
-            child.kill().await.map_err(|e| e.to_string())?;
+            let mut sent = false;
+            if let Some(stdin) = child.stdin.as_mut() {
+                if stdin.write_all(b"q").await.is_ok() {
+                    sent = true;
+                }
+            }
+            if !sent {
+                if let Some(id) = child.id() {
+                    kill(Pid::from_raw(id as i32), SIGTERM).map_err(|e| e.to_string())?;
+                }
+            }
             let _ = child.wait().await;
         }
         Ok(())
