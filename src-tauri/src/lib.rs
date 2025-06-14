@@ -525,6 +525,30 @@ async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state
 }
 
 #[tauri::command]
+async fn list_saved_videos(obs_state: tauri::State<'_, ObsWsState>) -> Result<Vec<String>, String> {
+    let resp = send_obs_request_wrapper(obs_state.0.clone(), "GetRecordDirectory").await?;
+    let dir = resp
+        .get("d")
+        .and_then(|d| d.get("responseData"))
+        .and_then(|rd| rd.get("recordDirectory"))
+        .and_then(|v| v.as_str())
+        .ok_or("no dir")?;
+    let mut entries = fs::read_dir(dir).await.map_err(|e| e.to_string())?;
+    let mut files = Vec::new();
+    while let Some(ent) = entries.next_entry().await.map_err(|e| e.to_string())? {
+        let path = ent.path();
+        if path.is_file() {
+            if let Some(ext) = path.extension() {
+                if ext == "mp4" || ext == "mkv" || ext == "mov" {
+                    files.push(path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    Ok(files)
+}
+
+#[tauri::command]
 fn load_settings_cmd(state: tauri::State<SettingsState>) -> AppSettings {
     state.0.lock().unwrap().clone()
 }
@@ -946,6 +970,7 @@ pub fn run() {
             stop_ffmpeg_replay,
             save_ffmpeg_clip,
             list_ffmpeg_devices,
+            list_saved_videos,
             load_settings_cmd,
             save_settings_cmd,
             greet])

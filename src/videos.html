@@ -5,9 +5,9 @@
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="vendor/bootstrap/bootstrap.min.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LoL Clip Tool</title>
+    <title>Saved Videos - LoL Clip Tool</title>
     <script defer src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
-    <script type="module" src="/main.js" defer></script>
+    <script type="module" src="/videos.js" defer></script>
   </head>
   <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
@@ -21,12 +21,8 @@
       </div>
     </nav>
     <main class="container py-4 app-container">
-      <h1 class="mb-4 text-center">LoL OBS Clip Tool</h1>
-      <p class="text-center">Welcome! Use this tool to record your highlights.</p>
-      <div class="d-flex justify-content-center gap-3">
-        <a href="settings.html" class="btn btn-primary">Go to Settings</a>
-        <a href="videos.html" class="btn btn-secondary">View Saved Videos</a>
-      </div>
+      <h1 class="mb-4 text-center">Saved Videos</h1>
+      <ul id="videoList" class="list-group"></ul>
     </main>
   </body>
 </html>
