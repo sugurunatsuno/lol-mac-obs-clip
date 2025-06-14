@@ -811,8 +811,8 @@ pub fn run() {
                             "Multikill" => {
                                 // active_player == killer_name の場合、OBSに送信
                                 if let Some(killer_name) = &event.KillerName {
-                                    if killer_name.contains(all_data.activePlayer.summonerName.as_str()) {
-                                        continue; // 自分以外のマルチキルは無視
+                                    if !killer_name.contains(all_data.activePlayer.summonerName.as_str()) {
+                                        continue; // multikills by other players are ignored
                                     }
                                     match mode {
                                         RecordingMode::Obs => {
