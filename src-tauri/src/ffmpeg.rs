@@ -1,12 +1,9 @@
-use tokio::process::{Child, ChildStdout, Command};
-use tokio::io::{AsyncBufReadExt, BufReader, AsyncWriteExt};
+use tauri::api::process::{Command, CommandChild};
 use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 use std::path::PathBuf;
-use nix::sys::signal::{kill, Signal::SIGTERM};
-use nix::unistd::Pid;
-use tokio_tungstenite; // for MaybeTlsStream? not needed but can't compile? Wait Ffmpeg doesn't use.
-use tokio; // not necessary? We'll rely on crate features.
+use tokio_tungstenite; // maybe required elsewhere
+use tokio; // rely on crate features
 use dirs;
 
 use crate::lol::LolEvent;
@@ -50,8 +47,9 @@ pub async fn ensure_ffmpeg_path(config: &tauri::Config) -> Result<PathBuf, Box<d
 }
 
 pub struct FfmpegProcess {
-    pub child: Option<Child>,
-    pub stdout: Option<BufReader<ChildStdout>>,
+    pub child: Option<CommandChild>,
+    pub ram_device: Option<String>,
+    pub ram_dir: Option<PathBuf>,
     pub ffmpeg_path: PathBuf,
     pub segment_seconds: u32,
     pub video_source: String,
@@ -63,7 +61,8 @@ impl FfmpegProcess {
     pub fn new(ffmpeg_path: PathBuf) -> Self {
         Self {
             child: None,
-            stdout: None,
+            ram_device: None,
+            ram_dir: None,
             ffmpeg_path,
             segment_seconds: 6,
             video_source: "1".into(),
@@ -96,75 +95,138 @@ impl FfmpegProcess {
         if self.child.is_some() {
             return Ok(());
         }
-        let mut child = Command::new("sh")
-            .arg("./ffmpeg_replaybuffer.sh")
-            .env("FFMPEG_BIN", &self.ffmpeg_path)
-            .arg("-t")
-            .arg(self.segment_seconds.to_string())
-            .arg("-f")
-            .arg(self.fps.to_string())
-            .arg("-s")
-            .arg(format!("{}:{}", self.video_source, self.audio_source))
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
+        const WRAP: u32 = 11;
+        const RAM_MB: u32 = 512;
+        const BITRATE: &str = "20M";
+
+        let blocks = RAM_MB * 2048;
+        let output = Command::new("hdiutil")
+            .args(["attach", "-nomount", &format!("ram://{}", blocks)])
+            .output()
+            .map_err(|e| e.to_string())?;
+        let dev = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Command::new("sudo")
+            .args(["diskutil", "erasevolume", "HFS+", "RAMDisk", &dev])
+            .status()
+            .map_err(|e| e.to_string())?;
+        let dir = PathBuf::from("/Volumes/RAMDisk/replay");
+        fs::create_dir_all(&dir).await.map_err(|e| e.to_string())?;
+
+        let gop = self.fps * self.segment_seconds;
+        let (mut rx, child) = Command::new(&self.ffmpeg_path)
+            .args([
+                "-f",
+                "avfoundation",
+                "-pixel_format",
+                "nv12",
+                "-framerate",
+                &(self.fps * 2).to_string(),
+                "-i",
+                &format!("{}:{}", self.video_source, self.audio_source),
+                "-vf",
+                &format!("fps={},format=yuv420p", self.fps),
+                "-c:v",
+                "h264_videotoolbox",
+                "-realtime",
+                "1",
+                "-bf",
+                "0",
+                "-b:v",
+                BITRATE,
+                "-g",
+                &gop.to_string(),
+                "-keyint_min",
+                &gop.to_string(),
+                "-sc_threshold",
+                "0",
+                "-force_key_frames",
+                &format!("expr:gte(t,n_forced*{}-0.1)", self.segment_seconds),
+                "-an",
+                "-f",
+                "segment",
+                "-segment_time",
+                &self.segment_seconds.to_string(),
+                "-segment_format",
+                "ts",
+                "-segment_wrap",
+                &WRAP.to_string(),
+                "-segment_list",
+                &dir.join("list.m3u8").to_string_lossy(),
+                "-segment_list_size",
+                &WRAP.to_string(),
+                "-segment_list_type",
+                "m3u8",
+                "-segment_list_flags",
+                "+live",
+                &dir.join("seg%03d.ts").to_string_lossy(),
+            ])
             .spawn()
             .map_err(|e| e.to_string())?;
-        if let Some(out) = child.stdout.take() {
-            self.stdout = Some(BufReader::new(out));
-        }
+        tauri::async_runtime::spawn(async move {
+            while rx.recv().await.is_some() {}
+        });
+
         self.child = Some(child);
+        self.ram_device = Some(dev);
+        self.ram_dir = Some(dir);
         Ok(())
     }
 
     pub async fn stop(&mut self) -> Result<(), String> {
-        if let Some(mut child) = self.child.take() {
-            let mut sent = false;
-            if let Some(stdin) = child.stdin.as_mut() {
-                if stdin.write_all(b"q").await.is_ok() {
-                    sent = true;
-                }
-            }
-            if !sent {
-                if let Some(id) = child.id() {
-                    kill(Pid::from_raw(id as i32), SIGTERM).map_err(|e| e.to_string())?;
-                }
-            }
-            let _ = child.wait().await;
+        if let Some(child) = self.child.take() {
+            let _ = child.kill();
         }
-        self.stdout = None;
+        if let Some(dir) = &self.ram_dir {
+            let _ = Command::new("diskutil")
+                .args(["eject", "/Volumes/RAMDisk"])
+                .status();
+            if let Some(dev) = &self.ram_device {
+                let _ = Command::new("hdiutil").args(["detach", dev]).status();
+            }
+            let _ = fs::remove_dir_all(dir).await;
+        }
+        self.ram_device = None;
+        self.ram_dir = None;
         Ok(())
     }
 
     pub async fn save(&mut self) -> Result<PathBuf, String> {
-        if let Some(child) = &mut self.child {
-            if let Some(stdin) = child.stdin.as_mut() {
-                stdin.write_all(b"s").await.map_err(|e| e.to_string())?;
-            }
+        const WRAP: u32 = 11;
+
+        let dir = if let Some(d) = &self.ram_dir {
+            d.clone()
         } else {
             return Err("ffmpeg not running".into());
-        }
+        };
 
-        if let Some(stdout) = self.stdout.as_mut() {
-            let mut line = String::new();
-            loop {
-                line.clear();
-                let n = stdout
-                    .read_line(&mut line)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                if n == 0 {
-                    return Err("ffmpeg ended".into());
-                }
-                if let Some(ts) = line.strip_prefix("saved ") {
-                    let ts = ts.trim();
-                    let mut path = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-                    path.push("Movies");
-                    path.push(format!("replay_{}.mp4", ts));
-                    return Ok(path);
-                }
-            }
-        }
-        Err("no stdout".into())
+        let offset = -(WRAP as i32 - 1);
+        let dur = self.segment_seconds * (WRAP - 1);
+        let ts = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+        let mut out = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        out.push("Movies");
+        fs::create_dir_all(&out).await.map_err(|e| e.to_string())?;
+        out.push(format!("replay_{}.mp4", ts));
+
+        Command::new(&self.ffmpeg_path)
+            .args([
+                "-nostdin",
+                "-y",
+                "-live_start_index",
+                &offset.to_string(),
+                "-i",
+                &dir.join("list.m3u8").to_string_lossy(),
+                "-t",
+                &dur.to_string(),
+                "-c",
+                "copy",
+                "-movflags",
+                "+faststart",
+                &out.to_string_lossy(),
+            ])
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        Ok(out)
     }
 }
 
