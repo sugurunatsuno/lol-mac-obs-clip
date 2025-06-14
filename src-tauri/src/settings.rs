@@ -11,6 +11,8 @@ pub struct AppSettings {
     pub fps: u32,
     pub video_source: String,
     pub audio_source: String,
+    pub wrap_count: u32,
+    pub bitrate: String,
 }
 
 impl Default for AppSettings {
@@ -21,6 +23,8 @@ impl Default for AppSettings {
             fps: 30,
             video_source: "1".into(),
             audio_source: "none".into(),
+            wrap_count: 11,
+            bitrate: "20M".into(),
         }
     }
 }

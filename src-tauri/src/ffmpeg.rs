@@ -54,6 +54,8 @@ pub struct FfmpegProcess {
     pub video_source: String,
     pub audio_source: String,
     pub fps: u32,
+    pub wrap_count: u32,
+    pub bitrate: String,
 }
 
 impl FfmpegProcess {
@@ -67,6 +69,8 @@ impl FfmpegProcess {
             video_source: "1".into(),
             audio_source: "none".into(),
             fps: 30,
+            wrap_count: 11,
+            bitrate: "20M".into(),
         }
     }
 
@@ -90,6 +94,14 @@ impl FfmpegProcess {
         self.fps = fps;
     }
 
+    pub fn set_wrap_count(&mut self, wrap: u32) {
+        self.wrap_count = wrap;
+    }
+
+    pub fn set_bitrate(&mut self, bitrate: String) {
+        self.bitrate = bitrate;
+    }
+
     pub async fn start(&mut self) -> Result<(), String> {
         if let Some(child) = self.child.as_mut() {
             if child.try_wait().map_err(|e| e.to_string())?.is_none() {
@@ -99,9 +111,7 @@ impl FfmpegProcess {
         if self.child.is_some() {
             self.stop().await?;
         }
-        const WRAP: u32 = 11;
         const RAM_MB: u32 = 512;
-        const BITRATE: &str = "20M";
 
         let blocks = RAM_MB * 2048;
         let output = Command::new("hdiutil")
@@ -139,7 +149,7 @@ impl FfmpegProcess {
                 "-bf",
                 "0",
                 "-b:v",
-                BITRATE,
+                &self.bitrate,
                 "-g",
                 &gop.to_string(),
                 "-keyint_min",
@@ -156,11 +166,11 @@ impl FfmpegProcess {
                 "-segment_format",
                 "ts",
                 "-segment_wrap",
-                &WRAP.to_string(),
+                &self.wrap_count.to_string(),
                 "-segment_list",
                 &dir.join("list.m3u8").to_string_lossy(),
                 "-segment_list_size",
-                &WRAP.to_string(),
+                &self.wrap_count.to_string(),
                 "-segment_list_type",
                 "m3u8",
                 "-segment_list_flags",
@@ -195,7 +205,6 @@ impl FfmpegProcess {
     }
 
     pub async fn save(&mut self) -> Result<PathBuf, String> {
-        const WRAP: u32 = 11;
 
         let dir = if let Some(d) = &self.ram_dir {
             d.clone()
@@ -203,8 +212,8 @@ impl FfmpegProcess {
             return Err("ffmpeg not running".into());
         };
 
-        let offset = -(WRAP as i32 - 1);
-        let dur = self.segment_seconds * (WRAP - 1);
+        let offset = -(self.wrap_count as i32 - 1);
+        let dur = self.segment_seconds * (self.wrap_count - 1);
         let ts = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
         let mut out = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         out.push("Movies");
