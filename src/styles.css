@@ -148,3 +148,8 @@ button {
   border-bottom: 1px solid #ddd;
   font-size: 0.95rem;
 }
+
+.mode-toggle {
+  margin-top: 0.5rem;
+  display: inline-block;
+}
