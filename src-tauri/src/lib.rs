@@ -545,19 +545,22 @@ where
         match client.get("https://127.0.0.1:2999/liveclientdata/allgamedata").send().await {
             Ok(response) => {
                 if let Ok(body) = response.text().await {
-                    if let Ok(all_data) = serde_json::from_str::<AllGameData>(&body){
-                        let new_events: Vec<LolEvent> = all_data.clone().events.events.into_iter()
-                            .filter(|event| !last_event_ids.contains(&event.EventID))
-                            .collect();
-                        if !new_events.is_empty() {
-                            println!("New events detected: {}", new_events.len());
-                            callback(&all_data, new_events.clone());
-                            for event in &new_events {
-                                last_event_ids.insert(event.EventID);
+                    match serde_json::from_str::<AllGameData>(&body) {
+                        Ok(all_data) => {
+                            let new_events: Vec<LolEvent> = all_data.clone().events.events.into_iter()
+                                .filter(|event| !last_event_ids.contains(&event.EventID))
+                                .collect();
+                            if !new_events.is_empty() {
+                                println!("New events detected: {}", new_events.len());
+                                callback(&all_data, new_events.clone());
+                                for event in &new_events {
+                                    last_event_ids.insert(event.EventID);
+                                }
                             }
                         }
-                    } else {
-                        eprintln!("Failed to parse AllGameData from response:");
+                        Err(e) => {
+                            eprintln!("Failed to parse AllGameData from response: {}", e);
+                        }
                     }
                 }
             }
