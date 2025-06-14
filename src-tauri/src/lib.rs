@@ -9,11 +9,12 @@ use tauri::async_runtime::spawn;
 use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
-use tokio::process::{Child, Command};
+use tokio::process::{Child, ChildStdout, Command};
+use tokio::io::{AsyncBufReadExt, BufReader, AsyncWriteExt};
 use std::process::Stdio;
 use nix::sys::signal::{kill, Signal::SIGTERM};
 use nix::unistd::Pid;
-use tokio::io::AsyncWriteExt;
+use dirs;
 use reqwest::Client;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -312,7 +313,7 @@ pub struct EventData {
     pub events: Vec<LolEvent>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct LolEvent {
     pub EventID: i64,
     pub EventName: String,
@@ -505,7 +506,7 @@ async fn save_replay_buffer(
         }
         RecordingMode::Shell => {
             let mut proc = ffmpeg_state.0.lock().await;
-            proc.save().await
+            proc.save().await.map(|_| ())
         }
     }
 }
@@ -599,7 +600,7 @@ async fn stop_ffmpeg_replay(
 #[tauri::command]
 async fn save_ffmpeg_clip(state: tauri::State<'_, FfmpegState>) -> Result<(), String> {
     let mut proc = state.0.lock().await;
-    proc.save().await
+    proc.save().await.map(|_| ())
 }
 
 #[derive(Serialize)]
@@ -674,6 +675,7 @@ struct ObsWsState(SharedObsWsClient);
 
 struct FfmpegProcess {
     child: Option<Child>,
+    stdout: Option<BufReader<ChildStdout>>,
     ffmpeg_path: PathBuf,
     segment_seconds: u32,
     video_source: String,
@@ -685,6 +687,7 @@ impl FfmpegProcess {
     fn new(ffmpeg_path: PathBuf) -> Self {
         Self {
             child: None,
+            stdout: None,
             ffmpeg_path,
             segment_seconds: 6,
             video_source: "1".into(),
@@ -717,7 +720,7 @@ impl FfmpegProcess {
         if self.child.is_some() {
             return Ok(());
         }
-        let child = Command::new("sh")
+        let mut child = Command::new("sh")
             .arg("./ffmpeg_replaybuffer.sh")
             .env("FFMPEG_BIN", &self.ffmpeg_path)
             .arg("-t")
@@ -727,8 +730,12 @@ impl FfmpegProcess {
             .arg("-s")
             .arg(format!("{}:{}", self.video_source, self.audio_source))
             .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
             .spawn()
             .map_err(|e| e.to_string())?;
+        if let Some(out) = child.stdout.take() {
+            self.stdout = Some(BufReader::new(out));
+        }
         self.child = Some(child);
         Ok(())
     }
@@ -748,21 +755,81 @@ impl FfmpegProcess {
             }
             let _ = child.wait().await;
         }
+        self.stdout = None;
         Ok(())
     }
 
-    async fn save(&mut self) -> Result<(), String> {
+    async fn save(&mut self) -> Result<PathBuf, String> {
         if let Some(child) = &mut self.child {
             if let Some(stdin) = child.stdin.as_mut() {
                 stdin.write_all(b"s").await.map_err(|e| e.to_string())?;
             }
+        } else {
+            return Err("ffmpeg not running".into());
         }
-        Ok(())
+
+        if let Some(stdout) = self.stdout.as_mut() {
+            let mut line = String::new();
+            loop {
+                line.clear();
+                let n = stdout
+                    .read_line(&mut line)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                if n == 0 {
+                    return Err("ffmpeg ended".into());
+                }
+                if let Some(ts) = line.strip_prefix("saved ") {
+                    let ts = ts.trim();
+                    let mut path = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+                    path.push("Movies");
+                    path.push(format!("replay_{}.mp4", ts));
+                    return Ok(path);
+                }
+            }
+        }
+        Err("no stdout".into())
     }
 }
 
 type SharedFfmpegProcess = Arc<AsyncMutex<FfmpegProcess>>;
 struct FfmpegState(SharedFfmpegProcess);
+
+async fn write_clip_metadata(
+    path: &std::path::Path,
+    events: &[LolEvent],
+    clip_start: f64,
+) -> Result<(), String> {
+    #[derive(Serialize)]
+    struct EventWithOffset<'a> {
+        #[serde(flatten)]
+        event: &'a LolEvent,
+        offset: f64,
+    }
+
+    #[derive(Serialize)]
+    struct Metadata<'a> {
+        events: Vec<EventWithOffset<'a>>,
+    }
+
+    let events_with_offset = events
+        .iter()
+        .map(|e| EventWithOffset {
+            event: e,
+            offset: e.EventTime - clip_start,
+        })
+        .collect();
+
+    let data = Metadata {
+        events: events_with_offset,
+    };
+
+    let json_path = path.with_extension("json");
+    let contents = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
+    tokio::fs::write(json_path, contents)
+        .await
+        .map_err(|e| e.to_string())
+}
 
 // 初回コマンド送信時
 async fn send_obs_command_wrapper(shared: SharedObsWsClient, command: &str) -> Result<(), String> {
@@ -933,16 +1000,31 @@ pub fn run() {
                                         }
                                         RecordingMode::Shell => {
                                             let ffmpeg_clone = ffmpeg_process_clone.clone();
+                                            let event_clone = event.clone();
+                                            let events_snapshot = all_data.events.events.clone();
                                             tauri::async_runtime::spawn(async move {
                                                 let mut proc = ffmpeg_clone.lock().await;
-                                                if let Err(e) = proc.save().await {
-                                                    eprintln!("Failed to save clip: {}", e);
+                                                match proc.save().await {
+                                                    Ok(path) => {
+                                                        let dur = proc.segment_seconds * 10;
+                                                        let clip_start = event_clone.EventTime - dur as f64;
+                                                        let relevant_events: Vec<LolEvent> = events_snapshot
+                                                            .into_iter()
+                                                            .filter(|ev| ev.EventTime >= clip_start)
+                                                            .collect();
+                                                        if let Err(e) = write_clip_metadata(&path, &relevant_events, clip_start).await {
+                                                            eprintln!("Failed to write metadata: {}", e);
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        eprintln!("Failed to save clip: {}", e);
+                                                    }
                                                 }
                                             });
                                         }
                                     }
                                 }
-                            
+
                             }
                             "TurretKilled" => {
                                 
