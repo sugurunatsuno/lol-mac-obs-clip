@@ -90,7 +90,7 @@ impl FfmpegProcess {
         self.fps = fps;
     }
 
-    pub async fn start(&mut self) -> Result<(), String> {
+    pub async fn start(&mut self, shared: SharedFfmpegProcess) -> Result<(), String> {
         if let Some(child) = self.child.as_mut() {
             if child.try_wait().map_err(|e| e.to_string())?.is_none() {
                 return Ok(());
@@ -171,8 +171,29 @@ impl FfmpegProcess {
             .map_err(|e| e.to_string())?;
 
         self.child = Some(child);
-        self.ram_device = Some(dev);
-        self.ram_dir = Some(dir);
+        self.ram_device = Some(dev.clone());
+        self.ram_dir = Some(dir.clone());
+
+        let save_path = dir.join(".trigger_save");
+        let quit_path = dir.join(".trigger_quit");
+        tauri::async_runtime::spawn(async move {
+            use tokio::time::{sleep, Duration};
+            loop {
+                if fs::metadata(&save_path).await.is_ok() {
+                    let _ = fs::remove_file(&save_path).await;
+                    let mut p = shared.lock().await;
+                    let _ = p.save().await;
+                }
+                if fs::metadata(&quit_path).await.is_ok() {
+                    let _ = fs::remove_file(&quit_path).await;
+                    let mut p = shared.lock().await;
+                    let _ = p.stop().await;
+                    break;
+                }
+                sleep(Duration::from_millis(250)).await;
+            }
+        });
+
         Ok(())
     }
 
