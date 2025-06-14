@@ -15,6 +15,9 @@ use tokio::io::AsyncWriteExt;
 use reqwest::Client;
 use std::collections::HashSet;
 
+mod settings;
+use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState};
+
 type WsType = WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>;
 
 pub struct ObsWsClient {
@@ -457,6 +460,37 @@ async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state
 }
 
 #[tauri::command]
+fn load_settings_cmd(state: tauri::State<SettingsState>) -> AppSettings {
+    state.0.lock().unwrap().clone()
+}
+
+#[tauri::command]
+async fn save_settings_cmd(
+    settings: AppSettings,
+    state: tauri::State<'_, SettingsState>,
+    path: tauri::State<'_, SettingsPath>,
+    status: tauri::State<'_, AppStatusState>,
+    ffmpeg: tauri::State<'_, FfmpegState>,
+) -> Result<(), String> {
+    {
+        let mut lock = state.0.lock().unwrap();
+        *lock = settings.clone();
+    }
+    {
+        let mut st = status.0.lock().unwrap();
+        st.recording_mode = settings.recording_mode.clone();
+    }
+    {
+        let mut proc = ffmpeg.0.lock().await;
+        proc.set_segment_seconds(settings.segment_seconds);
+        proc.set_video_source(settings.video_source.clone());
+        proc.set_audio_source(settings.audio_source.clone());
+        proc.set_fps(settings.fps);
+    }
+    save_settings(&path.0, &settings).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn start_ffmpeg_replay(
     status_state: tauri::State<'_, AppStatusState>,
     state: tauri::State<'_, FfmpegState>,
@@ -624,18 +658,30 @@ struct AppStatusState(Arc<Mutex<AppStatus>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let ctx = tauri::generate_context!();
+    let config_path = tauri::api::path::app_config_dir(&ctx.config())
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("settings.json");
+    let settings = load_settings(&config_path).unwrap_or_default();
 
     let status = Arc::new(Mutex::new(AppStatus {
         game_state: GameState::NotStarted,
         obs_state: ObsState::Disconnected,
-        recording_mode: RecordingMode::Obs,
+        recording_mode: settings.recording_mode.clone(),
         is_recording: false,
         replay_buffer_running: false,
     }));
 
     // グローバルで
     let obs_ws_client: SharedObsWsClient = Arc::new(Mutex::new(None));
-    let ffmpeg_process: SharedFfmpegProcess = Arc::new(AsyncMutex::new(FfmpegProcess::new()));
+    let mut ffmpeg_proc = FfmpegProcess::new();
+    ffmpeg_proc.set_segment_seconds(settings.segment_seconds);
+    ffmpeg_proc.set_video_source(settings.video_source.clone());
+    ffmpeg_proc.set_audio_source(settings.audio_source.clone());
+    ffmpeg_proc.set_fps(settings.fps);
+    let ffmpeg_process: SharedFfmpegProcess = Arc::new(AsyncMutex::new(ffmpeg_proc));
+    let settings_state = SettingsState(Arc::new(Mutex::new(settings)));
+    let settings_path_state = SettingsPath(config_path.clone());
 
     let status_clone = status.clone();
 
@@ -653,10 +699,14 @@ pub fn run() {
             start_ffmpeg_replay,
             stop_ffmpeg_replay,
             save_ffmpeg_clip,
+            load_settings_cmd,
+            save_settings_cmd,
             greet])
         .manage(AppStatusState(status.clone()))
         .manage(ObsWsState(obs_ws_client.clone()))
         .manage(FfmpegState(ffmpeg_process.clone()))
+        .manage(settings_state)
+        .manage(settings_path_state)
         .setup(move |_app| {
 
             // OBS WebSocketクライアントの初期化
@@ -732,7 +782,7 @@ pub fn run() {
             Ok(())
         })
         
-        .run(tauri::generate_context!())
+        .run(ctx)
         .expect("error while running tauri application");
 }
 
