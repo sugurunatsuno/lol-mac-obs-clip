@@ -2,8 +2,6 @@ use tauri::api::process::{Command, CommandChild};
 use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 use std::path::PathBuf;
-use tokio_tungstenite; // maybe required elsewhere
-use tokio; // rely on crate features
 use dirs;
 
 use crate::lol::LolEvent;
