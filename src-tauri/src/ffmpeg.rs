@@ -111,22 +111,13 @@ impl FfmpegProcess {
         if self.child.is_some() {
             self.stop().await?;
         }
-        const RAM_MB: u32 = 512;
+        const WRAP: u32 = 11;
+        const BITRATE: &str = "20M";
 
-        let blocks = RAM_MB * 2048;
-        let output = Command::new("hdiutil")
-            .args(["attach", "-nomount", &format!("ram://{}", blocks)])
-            .output()
-            .map_err(|e| e.to_string())?;
-        if !output.status.success() {
-            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        let dir = PathBuf::from("/tmp/lol_obs_clip/replay");
+        if dir.exists() {
+            fs::remove_dir_all(&dir).await.map_err(|e| e.to_string())?;
         }
-        let dev = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        Command::new("sudo")
-            .args(["diskutil", "erasevolume", "HFS+", "RAMDisk", &dev])
-            .status()
-            .map_err(|e| e.to_string())?;
-        let dir = PathBuf::from("/Volumes/RAMDisk/replay");
         fs::create_dir_all(&dir).await.map_err(|e| e.to_string())?;
 
         let gop = self.fps * self.segment_seconds;
@@ -181,7 +172,7 @@ impl FfmpegProcess {
             .map_err(|e| e.to_string())?;
 
         self.child = Some(child);
-        self.ram_device = Some(dev);
+        self.ram_device = None;
         self.ram_dir = Some(dir);
         Ok(())
     }
@@ -191,12 +182,6 @@ impl FfmpegProcess {
             let _ = child.kill();
         }
         if let Some(dir) = &self.ram_dir {
-            let _ = Command::new("diskutil")
-                .args(["eject", "/Volumes/RAMDisk"])
-                .status();
-            if let Some(dev) = &self.ram_device {
-                let _ = Command::new("hdiutil").args(["detach", dev]).status();
-            }
             let _ = fs::remove_dir_all(dir).await;
         }
         self.ram_device = None;
