@@ -34,8 +34,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     const fps = parseInt(document.getElementById('fpsInput').value, 10);
     const videoSource = document.getElementById('videoSourceInput').value;
     const audioSource = document.getElementById('audioSourceInput').value;
+    const wrapCount = parseInt(document.getElementById('wrapCountInput').value, 10);
+    const bitrate = document.getElementById('bitrateInput').value;
     try {
-      await invoke('start_ffmpeg_replay', { segmentSeconds, fps, videoSource, audioSource });
+      await invoke('start_ffmpeg_replay', { segmentSeconds, fps, videoSource, audioSource, wrapCount, bitrate });
       logEvent("🔁 リプレイバッファを開始しました");
     } catch (e) {
       logEvent(`⚠️ リプレイバッファの開始に失敗しました: ${e}`);
@@ -100,6 +102,8 @@ async function loadSettings() {
   document.getElementById('fpsInput').value = s.fps;
   document.getElementById('videoSourceInput').value = s.video_source;
   document.getElementById('audioSourceInput').value = s.audio_source;
+  document.getElementById('wrapCountInput').value = s.wrap_count;
+  document.getElementById('bitrateInput').value = s.bitrate;
   document.getElementById('modeToggle').checked = s.recording_mode === 'Shell';
 }
 
@@ -133,6 +137,8 @@ async function saveSettings() {
     fps: parseInt(document.getElementById('fpsInput').value, 10),
     video_source: document.getElementById('videoSourceInput').value,
     audio_source: document.getElementById('audioSourceInput').value,
+    wrap_count: parseInt(document.getElementById('wrapCountInput').value, 10),
+    bitrate: document.getElementById('bitrateInput').value,
     recording_mode: document.getElementById('modeToggle').checked ? 'Shell' : 'Obs'
   };
   await invoke('save_settings_cmd', { settings });

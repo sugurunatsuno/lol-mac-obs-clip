@@ -54,6 +54,8 @@ pub struct FfmpegProcess {
     pub video_source: String,
     pub audio_source: String,
     pub fps: u32,
+    pub wrap_count: u32,
+    pub bitrate: String,
 }
 
 impl FfmpegProcess {
@@ -67,6 +69,8 @@ impl FfmpegProcess {
             video_source: "1".into(),
             audio_source: "none".into(),
             fps: 30,
+            wrap_count: 11,
+            bitrate: "20M".into(),
         }
     }
 
@@ -90,7 +94,16 @@ impl FfmpegProcess {
         self.fps = fps;
     }
 
+    pub fn set_wrap_count(&mut self, wrap: u32) {
+        self.wrap_count = wrap;
+    }
+
+    pub fn set_bitrate(&mut self, bitrate: String) {
+        self.bitrate = bitrate;
+    }
+
     pub async fn start(&mut self, shared: SharedFfmpegProcess) -> Result<(), String> {
+
         if let Some(child) = self.child.as_mut() {
             if child.try_wait().map_err(|e| e.to_string())?.is_none() {
                 return Ok(());
@@ -100,23 +113,12 @@ impl FfmpegProcess {
             self.stop().await?;
         }
         const WRAP: u32 = 11;
-        const RAM_MB: u32 = 512;
         const BITRATE: &str = "20M";
 
-        let blocks = RAM_MB * 2048;
-        let output = Command::new("hdiutil")
-            .args(["attach", "-nomount", &format!("ram://{}", blocks)])
-            .output()
-            .map_err(|e| e.to_string())?;
-        if !output.status.success() {
-            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        let dir = PathBuf::from("/tmp/lol_obs_clip/replay");
+        if dir.exists() {
+            fs::remove_dir_all(&dir).await.map_err(|e| e.to_string())?;
         }
-        let dev = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        Command::new("sudo")
-            .args(["diskutil", "erasevolume", "HFS+", "RAMDisk", &dev])
-            .status()
-            .map_err(|e| e.to_string())?;
-        let dir = PathBuf::from("/Volumes/RAMDisk/replay");
         fs::create_dir_all(&dir).await.map_err(|e| e.to_string())?;
 
         let gop = self.fps * self.segment_seconds;
@@ -139,7 +141,7 @@ impl FfmpegProcess {
                 "-bf",
                 "0",
                 "-b:v",
-                BITRATE,
+                &self.bitrate,
                 "-g",
                 &gop.to_string(),
                 "-keyint_min",
@@ -156,11 +158,11 @@ impl FfmpegProcess {
                 "-segment_format",
                 "ts",
                 "-segment_wrap",
-                &WRAP.to_string(),
+                &self.wrap_count.to_string(),
                 "-segment_list",
                 &dir.join("list.m3u8").to_string_lossy(),
                 "-segment_list_size",
-                &WRAP.to_string(),
+                &self.wrap_count.to_string(),
                 "-segment_list_type",
                 "m3u8",
                 "-segment_list_flags",
@@ -171,6 +173,7 @@ impl FfmpegProcess {
             .map_err(|e| e.to_string())?;
 
         self.child = Some(child);
+
         self.ram_device = Some(dev.clone());
         self.ram_dir = Some(dir.clone());
 
@@ -202,12 +205,6 @@ impl FfmpegProcess {
             let _ = child.kill();
         }
         if let Some(dir) = &self.ram_dir {
-            let _ = Command::new("diskutil")
-                .args(["eject", "/Volumes/RAMDisk"])
-                .status();
-            if let Some(dev) = &self.ram_device {
-                let _ = Command::new("hdiutil").args(["detach", dev]).status();
-            }
             let _ = fs::remove_dir_all(dir).await;
         }
         self.ram_device = None;
@@ -216,7 +213,6 @@ impl FfmpegProcess {
     }
 
     pub async fn save(&mut self) -> Result<PathBuf, String> {
-        const WRAP: u32 = 11;
 
         let dir = if let Some(d) = &self.ram_dir {
             d.clone()
@@ -224,8 +220,8 @@ impl FfmpegProcess {
             return Err("ffmpeg not running".into());
         };
 
-        let offset = -(WRAP as i32 - 1);
-        let dur = self.segment_seconds * (WRAP - 1);
+        let offset = -(self.wrap_count as i32 - 1);
+        let dur = self.segment_seconds * (self.wrap_count - 1);
         let ts = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
         let mut out = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         out.push("Movies");

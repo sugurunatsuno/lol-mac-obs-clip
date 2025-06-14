@@ -284,6 +284,8 @@ async fn save_settings_cmd(
         proc.set_video_source(settings.video_source.clone());
         proc.set_audio_source(settings.audio_source.clone());
         proc.set_fps(settings.fps);
+        proc.set_wrap_count(settings.wrap_count);
+        proc.set_bitrate(settings.bitrate.clone());
     }
     save_settings(&path.0, &settings).map_err(|e| e.to_string())
 }
@@ -296,6 +298,8 @@ async fn start_ffmpeg_replay(
     video_source: Option<String>,
     audio_source: Option<String>,
     fps: Option<u32>,
+    wrap_count: Option<u32>,
+    bitrate: Option<String>,
 ) -> Result<(), String> {
     let mut proc = state.0.lock().await;
     {
@@ -314,7 +318,15 @@ async fn start_ffmpeg_replay(
     if let Some(f) = fps {
         proc.set_fps(f);
     }
+
     let shared = state.0.clone();
+  
+    if let Some(w) = wrap_count {
+        proc.set_wrap_count(w);
+    }
+    if let Some(b) = bitrate {
+        proc.set_bitrate(b);
+    }
     proc.start(shared).await
 }
 
@@ -440,6 +452,8 @@ pub fn run() {
             ffmpeg_proc.set_video_source(settings.video_source.clone());
             ffmpeg_proc.set_audio_source(settings.audio_source.clone());
             ffmpeg_proc.set_fps(settings.fps);
+            ffmpeg_proc.set_wrap_count(settings.wrap_count);
+            ffmpeg_proc.set_bitrate(settings.bitrate.clone());
 
             let status = AppStatus {
                 game_state: GameState::NotStarted,

@@ -58,6 +58,14 @@
             <label class="form-label" for="audioSourceInput">音声ソース</label>
             <select class="form-select" id="audioSourceInput"></select>
           </div>
+          <div class="col-auto">
+            <label class="form-label" for="wrapCountInput">ラップ数</label>
+            <input class="form-control" id="wrapCountInput" type="number" min="1" value="11" />
+          </div>
+          <div class="col-auto">
+            <label class="form-label" for="bitrateInput">ビットレート</label>
+            <input class="form-control" id="bitrateInput" type="text" value="20M" />
+          </div>
         </div>
         <button class="btn btn-success me-2" id="btnReplayStart">開始</button>
         <button class="btn btn-warning me-2" id="btnReplayStop">停止</button>
