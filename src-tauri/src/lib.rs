@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as AsyncMutex;
 use std::time::Duration;
 use serde_json::json;
 use tauri::async_runtime::spawn;
@@ -296,10 +297,19 @@ enum ObsState {
     Error,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+enum RecordingMode {
+    Obs,
+    Shell,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct AppStatus {
     game_state: GameState,
     obs_state: ObsState,
+    recording_mode: RecordingMode,
+    is_recording: bool,
+    replay_buffer_running: bool,
 }
 
 
@@ -315,41 +325,129 @@ fn get_status(state: tauri::State<AppStatusState>) -> AppStatus {
 }
 
 #[tauri::command]
-async fn start_recording(state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
-    {
+async fn set_recording_mode(state: tauri::State<'_, AppStatusState>, mode: RecordingMode) -> Result<(), String> {
+    let mut lock = state.0.lock().unwrap();
+    lock.recording_mode = mode;
+    Ok(())
+}
+
+#[tauri::command]
+async fn start_recording(
+    state: tauri::State<'_, AppStatusState>,
+    obs_state: tauri::State<'_, ObsWsState>,
+    ffmpeg_state: tauri::State<'_, FfmpegState>,
+) -> Result<(), String> {
+    let mode = {
         let mut lock = state.0.lock().unwrap();
         lock.game_state = GameState::InProgress;
         lock.obs_state = ObsState::Recording;
+        lock.is_recording = true;
+        lock.replay_buffer_running = false;
+        lock.recording_mode.clone()
+    };
+    match mode {
+        RecordingMode::Obs => {
+            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartRecord"));
+            Ok(())
+        }
+        RecordingMode::Shell => {
+            let mut proc = ffmpeg_state.0.lock().await;
+            proc.start().await
+        }
     }
-    spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartRecord"));
-    Ok(())
 }
 
 #[tauri::command]
-async fn stop_recording(state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
-    {
+async fn stop_recording(
+    state: tauri::State<'_, AppStatusState>,
+    obs_state: tauri::State<'_, ObsWsState>,
+    ffmpeg_state: tauri::State<'_, FfmpegState>,
+) -> Result<(), String> {
+    let mode = {
         let mut lock = state.0.lock().unwrap();
         lock.game_state = GameState::Finished;
         lock.obs_state = ObsState::NotRecording;
+        lock.is_recording = false;
+        lock.replay_buffer_running = false;
+        lock.recording_mode.clone()
+    };
+    match mode {
+        RecordingMode::Obs => {
+            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopRecord"));
+            Ok(())
+        }
+        RecordingMode::Shell => {
+            let mut proc = ffmpeg_state.0.lock().await;
+            proc.stop().await
+        }
     }
-    spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopRecord"));
-    Ok(())
 }
 
 #[tauri::command]
-async fn start_replay_buffer(_state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
-    spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartReplayBuffer"));
-    Ok(())
+async fn start_replay_buffer(
+    state: tauri::State<'_, AppStatusState>,
+    obs_state: tauri::State<'_, ObsWsState>,
+    ffmpeg_state: tauri::State<'_, FfmpegState>,
+) -> Result<(), String> {
+    let mode = {
+        let mut lock = state.0.lock().unwrap();
+        lock.is_recording = true;
+        lock.replay_buffer_running = true;
+        lock.recording_mode.clone()
+    };
+    match mode {
+        RecordingMode::Obs => {
+            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartReplayBuffer"));
+            Ok(())
+        }
+        RecordingMode::Shell => {
+            let mut proc = ffmpeg_state.0.lock().await;
+            proc.start().await
+        }
+    }
 }
+
 #[tauri::command]
-async fn stop_replay_buffer(_state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
-    spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopReplayBuffer"));
-    Ok(())
+async fn stop_replay_buffer(
+    state: tauri::State<'_, AppStatusState>,
+    obs_state: tauri::State<'_, ObsWsState>,
+    ffmpeg_state: tauri::State<'_, FfmpegState>,
+) -> Result<(), String> {
+    let mode = {
+        let mut lock = state.0.lock().unwrap();
+        lock.is_recording = false;
+        lock.replay_buffer_running = false;
+        lock.recording_mode.clone()
+    };
+    match mode {
+        RecordingMode::Obs => {
+            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopReplayBuffer"));
+            Ok(())
+        }
+        RecordingMode::Shell => {
+            let mut proc = ffmpeg_state.0.lock().await;
+            proc.stop().await
+        }
+    }
 }
+
 #[tauri::command]
-async fn save_replay_buffer(_state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
-    spawn(send_obs_command_wrapper(obs_state.0.clone(), "SaveReplayBuffer"));
-    Ok(())
+async fn save_replay_buffer(
+    state: tauri::State<'_, AppStatusState>,
+    obs_state: tauri::State<'_, ObsWsState>,
+    ffmpeg_state: tauri::State<'_, FfmpegState>,
+) -> Result<(), String> {
+    let mode = { state.0.lock().unwrap().recording_mode.clone() };
+    match mode {
+        RecordingMode::Obs => {
+            spawn(send_obs_command_wrapper(obs_state.0.clone(), "SaveReplayBuffer"));
+            Ok(())
+        }
+        RecordingMode::Shell => {
+            let mut proc = ffmpeg_state.0.lock().await;
+            proc.save().await
+        }
+    }
 }
 
 #[tauri::command]
@@ -360,13 +458,18 @@ async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state
 
 #[tauri::command]
 async fn start_ffmpeg_replay(
+    status_state: tauri::State<'_, AppStatusState>,
     state: tauri::State<'_, FfmpegState>,
     segment_seconds: Option<u32>,
     video_source: Option<String>,
     audio_source: Option<String>,
     fps: Option<u32>,
 ) -> Result<(), String> {
-    let mut proc = state.0.lock().unwrap();
+    let mut proc = state.0.lock().await;
+    {
+        let mut status = status_state.0.lock().unwrap();
+        status.replay_buffer_running = true;
+    }
     if let Some(sec) = segment_seconds {
         proc.set_segment_seconds(sec);
     }
@@ -383,14 +486,21 @@ async fn start_ffmpeg_replay(
 }
 
 #[tauri::command]
-async fn stop_ffmpeg_replay(state: tauri::State<'_, FfmpegState>) -> Result<(), String> {
-    let mut proc = state.0.lock().unwrap();
+async fn stop_ffmpeg_replay(
+    status_state: tauri::State<'_, AppStatusState>,
+    state: tauri::State<'_, FfmpegState>,
+) -> Result<(), String> {
+    let mut proc = state.0.lock().await;
+    {
+        let mut status = status_state.0.lock().unwrap();
+        status.replay_buffer_running = false;
+    }
     proc.stop().await
 }
 
 #[tauri::command]
 async fn save_ffmpeg_clip(state: tauri::State<'_, FfmpegState>) -> Result<(), String> {
-    let mut proc = state.0.lock().unwrap();
+    let mut proc = state.0.lock().await;
     proc.save().await
 }
 
@@ -471,7 +581,7 @@ impl FfmpegProcess {
     }
 }
 
-type SharedFfmpegProcess = Arc<Mutex<FfmpegProcess>>;
+type SharedFfmpegProcess = Arc<AsyncMutex<FfmpegProcess>>;
 struct FfmpegState(SharedFfmpegProcess);
 
 // 初回コマンド送信時
@@ -518,10 +628,14 @@ pub fn run() {
     let status = Arc::new(Mutex::new(AppStatus {
         game_state: GameState::NotStarted,
         obs_state: ObsState::Disconnected,
+        recording_mode: RecordingMode::Obs,
+        is_recording: false,
+        replay_buffer_running: false,
     }));
 
     // グローバルで
     let obs_ws_client: SharedObsWsClient = Arc::new(Mutex::new(None));
+    let ffmpeg_process: SharedFfmpegProcess = Arc::new(AsyncMutex::new(FfmpegProcess::new()));
 
     let status_clone = status.clone();
 
@@ -529,6 +643,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_status,
+            set_recording_mode,
             start_recording,
             stop_recording,
             start_replay_buffer,
@@ -541,11 +656,12 @@ pub fn run() {
             greet])
         .manage(AppStatusState(status.clone()))
         .manage(ObsWsState(obs_ws_client.clone()))
-        .manage(FfmpegState(Arc::new(Mutex::new(FfmpegProcess::new()))))
+        .manage(FfmpegState(ffmpeg_process.clone()))
         .setup(move |_app| {
 
             // OBS WebSocketクライアントの初期化
             let obs_ws_client_clone = obs_ws_client.clone();
+            let ffmpeg_process_clone = ffmpeg_process.clone();
 
             // LoLのイベントをポーリングして処理するスレッド
             tauri::async_runtime::spawn(async move {
@@ -556,7 +672,9 @@ pub fn run() {
                     if status.game_state == GameState::NotStarted {
                         status.game_state = GameState::InProgress;
                     }
-
+                    let mode = status.recording_mode.clone();
+                    drop(status);
+                    
                     // 現在操作中のプレイヤー情報をログに出力
                     // println!("Active Player: {} ({})", all_data.active_player.summoner_name, all_data.active_player.champion_name);
 
@@ -572,15 +690,27 @@ pub fn run() {
                                     if killer_name.contains(all_data.activePlayer.summonerName.as_str()) {
                                         continue; // 自分以外のマルチキルは無視
                                     }
-                                    let obs_client_clone = obs_ws_client_clone.clone();
-
-                                    tauri::async_runtime::spawn(async move {
-                                        if let Err(e) = send_obs_command_wrapper(obs_client_clone, "SaveReplayBuffer").await {
-                                            eprintln!("Failed to send Multikill command to OBS: {}", e);
-                                        } else {
-                                            println!("Sent Multikill command to OBS");
+                                    match mode {
+                                        RecordingMode::Obs => {
+                                            let obs_client_clone = obs_ws_client_clone.clone();
+                                            tauri::async_runtime::spawn(async move {
+                                                if let Err(e) = send_obs_command_wrapper(obs_client_clone, "SaveReplayBuffer").await {
+                                                    eprintln!("Failed to send Multikill command to OBS: {}", e);
+                                                } else {
+                                                    println!("Sent Multikill command to OBS");
+                                                }
+                                            });
                                         }
-                                    });
+                                        RecordingMode::Shell => {
+                                            let ffmpeg_clone = ffmpeg_process_clone.clone();
+                                            tauri::async_runtime::spawn(async move {
+                                                let mut proc = ffmpeg_clone.lock().await;
+                                                if let Err(e) = proc.save().await {
+                                                    eprintln!("Failed to save clip: {}", e);
+                                                }
+                                            });
+                                        }
+                                    }
                                 }
                             
                             }

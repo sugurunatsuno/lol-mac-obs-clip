@@ -19,6 +19,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
 window.addEventListener("DOMContentLoaded", () => {
   // 各ボタンにイベントリスナーを設定
+  document.getElementById('modeToggle').addEventListener('change', async (e) => {
+    const mode = e.target.checked ? 'Shell' : 'Obs';
+    await invoke('set_recording_mode', { mode });
+    updateStatus();
+  });
   document.getElementById('btnStart').addEventListener('click', async () => {
     await invoke('start_recording');
     logEvent("🎥 録画を開始しました");
@@ -66,6 +71,11 @@ async function updateStatus() {
   const status = await invoke('get_status');
   document.getElementById('gameState').textContent = status.game_state;
   document.getElementById('obsState').textContent = status.obs_state;
+  const toggle = document.getElementById('modeToggle');
+  toggle.checked = status.recording_mode === 'Shell';
+  toggle.disabled = status.is_recording;
+  const saveBtn = document.getElementById('btnReplaySave');
+  saveBtn.disabled = !status.replay_buffer_running;
 }
 
 function logEvent(message) {
