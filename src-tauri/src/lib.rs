@@ -71,6 +71,24 @@ impl ObsWsClient {
         self.ws.send(Message::Text(req.to_string().into())).await?;
         Ok(())
     }
+
+    /// 任意のコマンド送信してレスポンスを受け取る
+    pub async fn send_request(&mut self, command: &str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let req = json!({
+            "op": 6,
+            "d": {
+                "requestType": command,
+                "requestId": "tauri-lol-obs-001"
+            }
+        });
+        self.ws.send(Message::Text(req.to_string().into())).await?;
+        if let Some(Ok(Message::Text(resp))) = self.ws.next().await {
+            let val: serde_json::Value = serde_json::from_str(&resp)?;
+            Ok(val)
+        } else {
+            Err("No response".into())
+        }
+    }
 }
 
 
@@ -456,9 +474,16 @@ async fn save_replay_buffer(
 }
 
 #[tauri::command]
-async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<(), String> {
-  spawn(send_obs_command_wrapper(obs_state.0.clone(), "GetRecordDirectory"));
-  Ok(())
+async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<String, String> {
+    let resp = send_obs_request_wrapper(obs_state.0.clone(), "GetRecordDirectory").await?;
+    let dir = resp
+        .get("d")
+        .and_then(|d| d.get("responseData"))
+        .and_then(|rd| rd.get("recordDirectory"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    Ok(dir)
 }
 
 #[tauri::command]
@@ -719,6 +744,37 @@ async fn send_obs_command_wrapper(shared: SharedObsWsClient, command: &str) -> R
     };
 
     // 終わったら Mutex に値を戻す
+    {
+        let mut guard = shared.lock().unwrap();
+        *guard = client_opt;
+    }
+    result
+}
+
+// コマンド送信してレスポンスを受け取る
+async fn send_obs_request_wrapper(shared: SharedObsWsClient, command: &str) -> Result<serde_json::Value, String> {
+    let mut needs_connect = false;
+    {
+        let client_guard = shared.lock().unwrap();
+        needs_connect = client_guard.is_none();
+    }
+    if needs_connect {
+        let client = ObsWsClient::connect_and_identify("ws://127.0.0.1:4455")
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut client_guard = shared.lock().unwrap();
+        *client_guard = Some(client);
+    }
+
+    let mut client_opt = {
+        let mut guard = shared.lock().unwrap();
+        guard.take()
+    };
+    let result = if let Some(ref mut client) = client_opt {
+        client.send_request(command).await.map_err(|e| e.to_string())
+    } else {
+        Err("OBS WS Client not connected".into())
+    };
     {
         let mut guard = shared.lock().unwrap();
         *guard = client_opt;
