@@ -88,8 +88,9 @@ async fn start_recording(
             Ok(())
         }
         RecordingMode::Shell => {
-            let mut proc = ffmpeg_state.0.lock().await;
-            proc.start().await
+            let shared = ffmpeg_state.0.clone();
+            let mut proc = shared.lock().await;
+            proc.start(shared).await
         }
     }
 }
@@ -138,8 +139,9 @@ async fn start_replay_buffer(
             Ok(())
         }
         RecordingMode::Shell => {
-            let mut proc = ffmpeg_state.0.lock().await;
-            proc.start().await
+            let shared = ffmpeg_state.0.clone();
+            let mut proc = shared.lock().await;
+            proc.start(shared).await
         }
     }
 }
@@ -316,13 +318,16 @@ async fn start_ffmpeg_replay(
     if let Some(f) = fps {
         proc.set_fps(f);
     }
+
+    let shared = state.0.clone();
+  
     if let Some(w) = wrap_count {
         proc.set_wrap_count(w);
     }
     if let Some(b) = bitrate {
         proc.set_bitrate(b);
     }
-    proc.start().await
+    proc.start(shared).await
 }
 
 #[tauri::command]

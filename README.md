@@ -94,6 +94,11 @@ When starting the replay buffer from the Tauri application, you can override sev
 
 These values are passed directly to `ffmpeg_replaybuffer.sh` when it is spawned.
 
+While the replay buffer is running, creating a `.trigger_save` file inside the
+segment directory will cause the buffer to be saved. Creating a `.trigger_quit`
+file will stop the replay buffer entirely. Both files are removed automatically
+after they are processed.
+
 ### ffmpeg download location
 
 The application stores its own ffmpeg binary under the directory returned by
