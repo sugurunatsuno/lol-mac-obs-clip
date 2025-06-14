@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 FFMPEG_BIN=${FFMPEG_BIN:-ffmpeg}
-
 FPS=30 BITRATE=20M SRC="1:none" SEG_S=6 WRAP=11 RAM_MB=512
+
 while getopts "f:b:s:t:n:r:h" o; do
   case $o in
     f) FPS=$OPTARG ;; b) BITRATE=$OPTARG ;;
@@ -18,6 +18,10 @@ BLOCKS=$((RAM_MB*2048))
 DEV=$(hdiutil attach -nomount "ram://$BLOCKS" | tr -d '[:space:]')
 sudo diskutil erasevolume HFS+ RAMDisk "$DEV" >/dev/null
 DIR=/Volumes/RAMDisk/replay; mkdir -p "$DIR"
+
+# トリガーファイル
+TRIGGER_SAVE="$DIR/.trigger_save"
+TRIGGER_QUIT="$DIR/.trigger_quit"
 
 cleanup() {
   [[ -n "${FF_PID:-}" ]] && { kill -TERM "$FF_PID" 2>/dev/null || true; sleep 1; kill -KILL "$FF_PID" 2>/dev/null || true; wait "$FF_PID" 2>/dev/null || true; }
@@ -38,15 +42,32 @@ trap cleanup EXIT INT TERM
   -segment_list_size "$WRAP" -segment_list_type m3u8 \
   -segment_list_flags +live "$DIR/seg%03d.ts" & FF_PID=$!
 
-echo "REC ▶︎   s=save  Esc/Q=quit"
+echo "REC ▶︎   s=save  Esc/Q=quit（ファイルトリガーも対応中！）"
 stty -icanon -echo
-while IFS= read -rsn1 k; do
+
+while true; do
+  k=""
+  if IFS= read -rsn1 k; then
+    : # キー入力あり
+  fi
+
+  # ファイルトリガー優先で上書き
+  if [ -e "$TRIGGER_SAVE" ]; then
+    k="s"
+    rm -f "$TRIGGER_SAVE"
+  fi
+  if [ -e "$TRIGGER_QUIT" ]; then
+    k="q"
+    rm -f "$TRIGGER_QUIT"
+  fi
+
   case "$k" in
     s)
       ts=$(date +%Y%m%d_%H%M%S)
       "$FFMPEG_BIN" -nostdin -y -live_start_index "$OFFSET" -i "$DIR/list.m3u8" \
              -t "$DUR" -c copy -movflags +faststart "$HOME/Movies/replay_$ts.mp4"
-      echo "saved $ts" ;;
-    $'\x1b'|q) break ;;  # Esc または q で終了
+      echo "📼 saved $ts"
+      ;;
+    $'\x1b'|q) break ;;
   esac
 done
