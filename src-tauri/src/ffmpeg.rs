@@ -104,6 +104,9 @@ impl FfmpegProcess {
             .args(["attach", "-nomount", &format!("ram://{}", blocks)])
             .output()
             .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
         let dev = String::from_utf8_lossy(&output.stdout).trim().to_string();
         Command::new("sudo")
             .args(["diskutil", "erasevolume", "HFS+", "RAMDisk", &dev])
@@ -207,7 +210,7 @@ impl FfmpegProcess {
         fs::create_dir_all(&out).await.map_err(|e| e.to_string())?;
         out.push(format!("replay_{}.mp4", ts));
 
-        Command::new(&self.ffmpeg_path)
+        let output = Command::new(&self.ffmpeg_path)
             .args([
                 "-nostdin",
                 "-y",
@@ -225,6 +228,9 @@ impl FfmpegProcess {
             ])
             .output()
             .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
 
         Ok(out)
     }

@@ -10,14 +10,22 @@ window.addEventListener("DOMContentLoaded", async () => {
     updateStatus();
   });
   document.getElementById('btnStart').addEventListener('click', async () => {
-    await invoke('start_recording');
-    logEvent("🎥 録画を開始しました");
+    try {
+      await invoke('start_recording');
+      logEvent("🎥 録画を開始しました");
+    } catch (e) {
+      logEvent(`⚠️ 録画開始に失敗しました: ${e}`);
+    }
     updateStatus();
   });
 
   document.getElementById('btnStop').addEventListener('click', async () => {
-    await invoke('stop_recording');
-    logEvent("⏹ 録画を停止しました");
+    try {
+      await invoke('stop_recording');
+      logEvent("⏹ 録画を停止しました");
+    } catch (e) {
+      logEvent(`⚠️ 録画停止に失敗しました: ${e}`);
+    }
     updateStatus();
   });
 
@@ -26,20 +34,32 @@ window.addEventListener("DOMContentLoaded", async () => {
     const fps = parseInt(document.getElementById('fpsInput').value, 10);
     const videoSource = document.getElementById('videoSourceInput').value;
     const audioSource = document.getElementById('audioSourceInput').value;
-    await invoke('start_ffmpeg_replay', { segmentSeconds, fps, videoSource, audioSource });
-    logEvent("🔁 リプレイバッファを開始しました");
+    try {
+      await invoke('start_ffmpeg_replay', { segmentSeconds, fps, videoSource, audioSource });
+      logEvent("🔁 リプレイバッファを開始しました");
+    } catch (e) {
+      logEvent(`⚠️ リプレイバッファの開始に失敗しました: ${e}`);
+    }
     updateStatus();
   });
 
   document.getElementById('btnReplayStop').addEventListener('click', async () => {
-    await invoke('stop_ffmpeg_replay');
-    logEvent("⏸ リプレイバッファを停止しました");
+    try {
+      await invoke('stop_ffmpeg_replay');
+      logEvent("⏸ リプレイバッファを停止しました");
+    } catch (e) {
+      logEvent(`⚠️ リプレイバッファの停止に失敗しました: ${e}`);
+    }
     updateStatus();
   });
 
   document.getElementById('btnReplaySave').addEventListener('click', async () => {
-    await invoke('save_ffmpeg_clip');
-    logEvent("💾 リプレイバッファを保存しました");
+    try {
+      await invoke('save_ffmpeg_clip');
+      logEvent("💾 リプレイバッファを保存しました");
+    } catch (e) {
+      logEvent(`⚠️ リプレイバッファの保存に失敗しました: ${e}`);
+    }
     updateStatus();
   });
 
@@ -84,23 +104,27 @@ async function loadSettings() {
 }
 
 async function loadDevices() {
-  const list = await invoke('list_ffmpeg_devices');
-  const vSel = document.getElementById('videoSourceInput');
-  const aSel = document.getElementById('audioSourceInput');
-  vSel.innerHTML = '';
-  list.video.forEach((d) => {
-    const opt = document.createElement('option');
-    opt.value = d.index;
-    opt.textContent = `[${d.index}] ${d.name}`;
-    vSel.appendChild(opt);
-  });
-  aSel.innerHTML = '';
-  list.audio.forEach((d) => {
-    const opt = document.createElement('option');
-    opt.value = d.index;
-    opt.textContent = `[${d.index}] ${d.name}`;
-    aSel.appendChild(opt);
-  });
+  try {
+    const list = await invoke('list_ffmpeg_devices');
+    const vSel = document.getElementById('videoSourceInput');
+    const aSel = document.getElementById('audioSourceInput');
+    vSel.innerHTML = '';
+    list.video.forEach((d) => {
+      const opt = document.createElement('option');
+      opt.value = d.index;
+      opt.textContent = `[${d.index}] ${d.name}`;
+      vSel.appendChild(opt);
+    });
+    aSel.innerHTML = '';
+    list.audio.forEach((d) => {
+      const opt = document.createElement('option');
+      opt.value = d.index;
+      opt.textContent = `[${d.index}] ${d.name}`;
+      aSel.appendChild(opt);
+    });
+  } catch (e) {
+    logEvent(`⚠️ デバイス情報の取得に失敗しました: ${e}`);
+  }
 }
 
 async function saveSettings() {

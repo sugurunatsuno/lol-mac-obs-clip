@@ -360,6 +360,9 @@ async fn list_ffmpeg_devices(state: tauri::State<'_, FfmpegState>) -> Result<Dev
         .output()
         .await
         .map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     let mut video = Vec::new();
