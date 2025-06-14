@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+FFMPEG_BIN=${FFMPEG_BIN:-ffmpeg}
+
 FPS=30 BITRATE=20M SRC="1:none" SEG_S=6 WRAP=11 RAM_MB=512
 while getopts "f:b:s:t:n:r:h" o; do
   case $o in
@@ -26,7 +28,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-ffmpeg -f avfoundation -pixel_format nv12 -framerate $((FPS*2)) -i "$SRC" \
+"$FFMPEG_BIN" -f avfoundation -pixel_format nv12 -framerate $((FPS*2)) -i "$SRC" \
   -vf "fps=$FPS,format=yuv420p" \
   -c:v h264_videotoolbox -realtime 1 -bf 0 -b:v "$BITRATE" \
   -g "$GOP" -keyint_min "$GOP" -sc_threshold 0 \
@@ -42,7 +44,7 @@ while IFS= read -rsn1 k; do
   case "$k" in
     s)
       ts=$(date +%Y%m%d_%H%M%S)
-      ffmpeg -nostdin -y -live_start_index "$OFFSET" -i "$DIR/list.m3u8" \
+      "$FFMPEG_BIN" -nostdin -y -live_start_index "$OFFSET" -i "$DIR/list.m3u8" \
              -t "$DUR" -c copy -movflags +faststart "$HOME/Movies/replay_$ts.mp4"
       echo "saved $ts" ;;
     $'\x1b'|q) break ;;  # Esc または q で終了

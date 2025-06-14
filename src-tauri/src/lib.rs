@@ -16,11 +16,48 @@ use nix::unistd::Pid;
 use tokio::io::AsyncWriteExt;
 use reqwest::Client;
 use std::collections::HashSet;
+use std::path::PathBuf;
+use tokio::fs;
 
 mod settings;
 use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState};
 
 type WsType = WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>;
+
+async fn ensure_ffmpeg_path(config: &tauri::Config) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut dir = tauri::api::path::app_local_data_dir(config)
+        .ok_or("no data dir")?;
+    dir.push("ffmpeg");
+    fs::create_dir_all(&dir).await?;
+    let bin_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+    let bin_path = dir.join(bin_name);
+    if bin_path.exists() {
+        return Ok(bin_path);
+    }
+
+    let url = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+        "https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-mac-arm64"
+    } else if cfg!(target_os = "macos") {
+        "https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-mac-x64"
+    } else if cfg!(target_os = "windows") {
+        "https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-win32-x64.exe"
+    } else {
+        "https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-linux-x64"
+    };
+
+    let bytes = reqwest::get(url).await?.bytes().await?;
+    fs::write(&bin_path, &bytes).await?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perm = fs::metadata(&bin_path).await?.permissions();
+        perm.set_mode(0o755);
+        fs::set_permissions(&bin_path, perm).await?;
+    }
+
+    Ok(bin_path)
+}
 
 pub struct ObsWsClient {
     ws: WsType,
@@ -578,8 +615,12 @@ struct DeviceList {
 }
 
 #[tauri::command]
-async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
-    let output = Command::new("ffmpeg")
+async fn list_ffmpeg_devices(state: tauri::State<'_, FfmpegState>) -> Result<DeviceList, String> {
+    let ffmpeg_path = {
+        let proc = state.0.lock().await;
+        proc.ffmpeg_path.clone()
+    };
+    let output = Command::new(ffmpeg_path)
         .arg("-f")
         .arg("avfoundation")
         .arg("-list_devices")
@@ -633,6 +674,7 @@ struct ObsWsState(SharedObsWsClient);
 
 struct FfmpegProcess {
     child: Option<Child>,
+    ffmpeg_path: PathBuf,
     segment_seconds: u32,
     video_source: String,
     audio_source: String,
@@ -640,9 +682,10 @@ struct FfmpegProcess {
 }
 
 impl FfmpegProcess {
-    fn new() -> Self {
+    fn new(ffmpeg_path: PathBuf) -> Self {
         Self {
             child: None,
+            ffmpeg_path,
             segment_seconds: 6,
             video_source: "1".into(),
             audio_source: "none".into(),
@@ -656,6 +699,10 @@ impl FfmpegProcess {
 
     fn set_video_source(&mut self, src: String) {
         self.video_source = src;
+    }
+
+    fn set_ffmpeg_path(&mut self, path: PathBuf) {
+        self.ffmpeg_path = path;
     }
 
     fn set_audio_source(&mut self, src: String) {
@@ -672,6 +719,7 @@ impl FfmpegProcess {
         }
         let child = Command::new("sh")
             .arg("./ffmpeg_replaybuffer.sh")
+            .env("FFMPEG_BIN", &self.ffmpeg_path)
             .arg("-t")
             .arg(self.segment_seconds.to_string())
             .arg("-f")
@@ -793,6 +841,8 @@ pub fn run() {
         .join("settings.json");
     let settings = load_settings(&config_path).unwrap_or_default();
 
+    let ffmpeg_path = tauri::async_runtime::block_on(ensure_ffmpeg_path(&ctx.config())).expect("ffmpeg setup");
+
     let status = Arc::new(Mutex::new(AppStatus {
         game_state: GameState::NotStarted,
         obs_state: ObsState::Disconnected,
@@ -803,7 +853,7 @@ pub fn run() {
 
     // グローバルで
     let obs_ws_client: SharedObsWsClient = Arc::new(Mutex::new(None));
-    let mut ffmpeg_proc = FfmpegProcess::new();
+    let mut ffmpeg_proc = FfmpegProcess::new(ffmpeg_path);
     ffmpeg_proc.set_segment_seconds(settings.segment_seconds);
     ffmpeg_proc.set_video_source(settings.video_source.clone());
     ffmpeg_proc.set_audio_source(settings.audio_source.clone());
