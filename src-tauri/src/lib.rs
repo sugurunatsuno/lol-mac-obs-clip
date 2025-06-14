@@ -524,8 +524,16 @@ async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state
     Ok(dir)
 }
 
+#[derive(Serialize)]
+struct SavedVideoInfo {
+    path: String,
+    name: String,
+    modified: String,
+    size: u64,
+}
+
 #[tauri::command]
-async fn list_saved_videos(obs_state: tauri::State<'_, ObsWsState>) -> Result<Vec<String>, String> {
+async fn list_saved_videos(obs_state: tauri::State<'_, ObsWsState>) -> Result<Vec<SavedVideoInfo>, String> {
     let resp = send_obs_request_wrapper(obs_state.0.clone(), "GetRecordDirectory").await?;
     let dir = resp
         .get("d")
@@ -540,7 +548,30 @@ async fn list_saved_videos(obs_state: tauri::State<'_, ObsWsState>) -> Result<Ve
         if path.is_file() {
             if let Some(ext) = path.extension() {
                 if ext == "mp4" || ext == "mkv" || ext == "mov" {
-                    files.push(path.to_string_lossy().to_string());
+                    let name = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    let (modified, size) = match ent.metadata().await {
+                        Ok(meta) => {
+                            let modified = meta
+                                .modified()
+                                .ok()
+                                .map(|t| {
+                                    let dt: chrono::DateTime<chrono::Local> = t.into();
+                                    dt.format("%Y-%m-%d %H:%M:%S").to_string()
+                                })
+                                .unwrap_or_default();
+                            (modified, meta.len())
+                        }
+                        Err(_) => (String::new(), 0),
+                    };
+                    files.push(SavedVideoInfo {
+                        path: path.to_string_lossy().to_string(),
+                        name,
+                        modified,
+                        size,
+                    });
                 }
             }
         }
