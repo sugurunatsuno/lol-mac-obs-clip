@@ -538,6 +538,67 @@ async fn save_ffmpeg_clip(state: tauri::State<'_, FfmpegState>) -> Result<(), St
     proc.save().await
 }
 
+#[derive(Serialize)]
+struct DeviceInfo {
+    index: i32,
+    name: String,
+}
+
+#[derive(Serialize)]
+struct DeviceList {
+    video: Vec<DeviceInfo>,
+    audio: Vec<DeviceInfo>,
+}
+
+#[tauri::command]
+async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
+    let output = Command::new("ffmpeg")
+        .arg("-f")
+        .arg("avfoundation")
+        .arg("-list_devices")
+        .arg("true")
+        .arg("-i")
+        .arg("")
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let mut video = Vec::new();
+    let mut audio = Vec::new();
+    let mut current = None::<&str>;
+
+    for line in stderr.lines() {
+        if line.contains("AVFoundation video devices") {
+            current = Some("video");
+            continue;
+        }
+        if line.contains("AVFoundation audio devices") {
+            current = Some("audio");
+            continue;
+        }
+        if let Some(kind) = current {
+            let trimmed = line.trim();
+            if let Some(start) = trimmed.find('[') {
+                if let Some(end) = trimmed[start + 1..].find(']') {
+                    let idx_str = &trimmed[start + 1..start + 1 + end];
+                    if let Ok(index) = idx_str.parse::<i32>() {
+                        let name = trimmed[start + 1 + end + 1..].trim();
+                        let info = DeviceInfo { index, name: name.to_string() };
+                        match kind {
+                            "video" => video.push(info),
+                            "audio" => audio.push(info),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(DeviceList { video, audio })
+}
+
 
 type SharedObsWsClient = Arc<Mutex<Option<ObsWsClient>>>;
 struct ObsWsState(SharedObsWsClient);
@@ -699,6 +760,7 @@ pub fn run() {
             start_ffmpeg_replay,
             stop_ffmpeg_replay,
             save_ffmpeg_clip,
+            list_ffmpeg_devices,
             load_settings_cmd,
             save_settings_cmd,
             greet])

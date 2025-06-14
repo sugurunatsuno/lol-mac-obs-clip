@@ -18,6 +18,7 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 window.addEventListener("DOMContentLoaded", async () => {
+  await loadDevices();
   await loadSettings();
   // 各ボタンにイベントリスナーを設定
   document.getElementById('modeToggle').addEventListener('change', async (e) => {
@@ -97,6 +98,26 @@ async function loadSettings() {
   document.getElementById('videoSourceInput').value = s.video_source;
   document.getElementById('audioSourceInput').value = s.audio_source;
   document.getElementById('modeToggle').checked = s.recording_mode === 'Shell';
+}
+
+async function loadDevices() {
+  const list = await invoke('list_ffmpeg_devices');
+  const vSel = document.getElementById('videoSourceInput');
+  const aSel = document.getElementById('audioSourceInput');
+  vSel.innerHTML = '';
+  list.video.forEach((d) => {
+    const opt = document.createElement('option');
+    opt.value = d.index;
+    opt.textContent = `[${d.index}] ${d.name}`;
+    vSel.appendChild(opt);
+  });
+  aSel.innerHTML = '';
+  list.audio.forEach((d) => {
+    const opt = document.createElement('option');
+    opt.value = d.index;
+    opt.textContent = `[${d.index}] ${d.name}`;
+    aSel.appendChild(opt);
+  });
 }
 
 async function saveSettings() {
