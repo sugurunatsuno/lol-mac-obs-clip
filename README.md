@@ -8,7 +8,8 @@ The frontend uses [Bootstrap](https://getbootstrap.com/) loaded via CDN for styl
 - **Rust**: install the latest stable toolchain via [rustup](https://rust-lang.org/tools/install).
 - **pnpm**: used for managing JavaScript dependencies.
 - **OBS Studio** with the **WebSocket** plugin enabled (v5 or later recommended).
-- **ffmpeg** in your `PATH` if you want to encode recordings.
+- No manual **ffmpeg** installation is required. The app downloads a suitable
+  binary to its local data directory on first run.
 - A running **League of Legends** client when using the tool.
 
 ## Build and Run
@@ -90,4 +91,11 @@ When starting the replay buffer from the Tauri application, you can override sev
   `avfoundation` input. Defaults to `1:none`.
 
 These values are passed directly to `ffmpeg_replaybuffer.sh` when it is spawned.
+
+### ffmpeg download location
+
+The application stores its own ffmpeg binary under the directory returned by
+`app_local_data_dir`. On macOS this is typically
+`~/Library/Application Support/<app>/ffmpeg/ffmpeg`. Replace the binary there to
+update or override the version shipped by default.
 
