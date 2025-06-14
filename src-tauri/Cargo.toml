@@ -27,5 +27,4 @@ tokio-tungstenite = "0.26.2"
 futures-util = "0.3.31"
 reqwest = {version = "*", features = ["json", "rustls-tls"] }
 chrono = "0.4.41"
-nix = "0.30"
 
