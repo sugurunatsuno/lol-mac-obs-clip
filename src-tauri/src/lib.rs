@@ -3,11 +3,11 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Mutex as AsyncMutex;
 use std::time::Duration;
 use std::collections::HashSet;
-use std::path::PathBuf;
 use tokio::process::Command;
 use tokio::fs;
 use reqwest::Client;
-use tauri::async_runtime::spawn;
+use tauri::{async_runtime::spawn, Manager};
+use std::path::PathBuf;
 
 mod settings;
 mod lol;
@@ -63,6 +63,8 @@ fn get_status(state: tauri::State<AppStatusState>) -> AppStatus {
 async fn set_recording_mode(state: tauri::State<'_, AppStatusState>, mode: RecordingMode) -> Result<(), String> {
     let mut lock = state.0.lock().unwrap();
     lock.recording_mode = mode;
+
+    println!("Recording mode set to: {:?}", lock.recording_mode);
     Ok(())
 }
 
@@ -404,33 +406,6 @@ struct AppStatusState(Arc<Mutex<AppStatus>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let ctx = tauri::generate_context!();
-    let config_path = tauri::api::path::app_config_dir(&ctx.config())
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("settings.json");
-    let settings = load_settings(&config_path).unwrap_or_default();
-
-    let ffmpeg_path = tauri::async_runtime::block_on(ensure_ffmpeg_path(&ctx.config())).expect("ffmpeg setup");
-
-    let status = Arc::new(Mutex::new(AppStatus {
-        game_state: GameState::NotStarted,
-        obs_state: ObsState::Disconnected,
-        recording_mode: settings.recording_mode.clone(),
-        is_recording: false,
-        replay_buffer_running: false,
-    }));
-
-    let obs_ws_client: SharedObsWsClient = Arc::new(Mutex::new(None));
-    let mut ffmpeg_proc = FfmpegProcess::new(ffmpeg_path);
-    ffmpeg_proc.set_segment_seconds(settings.segment_seconds);
-    ffmpeg_proc.set_video_source(settings.video_source.clone());
-    ffmpeg_proc.set_audio_source(settings.audio_source.clone());
-    ffmpeg_proc.set_fps(settings.fps);
-    let ffmpeg_process: SharedFfmpegProcess = Arc::new(AsyncMutex::new(ffmpeg_proc));
-    let settings_state = SettingsState(Arc::new(Mutex::new(settings)));
-    let settings_path_state = SettingsPath(config_path.clone());
-
-    let status_clone = status.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -451,12 +426,39 @@ pub fn run() {
             load_settings_cmd,
             save_settings_cmd,
             greet])
-        .manage(AppStatusState(status.clone()))
-        .manage(ObsWsState(obs_ws_client.clone()))
-        .manage(FfmpegState(ffmpeg_process.clone()))
-        .manage(settings_state)
-        .manage(settings_path_state)
         .setup(move |_app| {
+
+            let config_path = _app.path().config_dir().unwrap().join("settings.json");
+            let settings = load_settings(&config_path).unwrap_or_default();
+            let mut ffmpeg_path = PathBuf::new();
+            ffmpeg_path.push("ffmpeg");
+            let mut ffmpeg_proc = FfmpegProcess::new(ffmpeg_path);
+            ffmpeg_proc.set_segment_seconds(settings.segment_seconds);
+            ffmpeg_proc.set_video_source(settings.video_source.clone());
+            ffmpeg_proc.set_audio_source(settings.audio_source.clone());
+            ffmpeg_proc.set_fps(settings.fps);
+
+            let status = AppStatus {
+                game_state: GameState::NotStarted,
+                obs_state: ObsState::Disconnected,
+                recording_mode: settings.recording_mode.clone(),
+                is_recording: false,
+                replay_buffer_running: false,
+            };
+            let status = Arc::new(Mutex::new(status));
+
+            let ffmpeg_process: SharedFfmpegProcess = Arc::new(AsyncMutex::new(ffmpeg_proc));
+            let obs_ws_client: SharedObsWsClient = Arc::new(Mutex::new(None));
+            let status_clone = status.clone();
+            let settings_state = SettingsState(Arc::new(Mutex::new(settings)));
+            let settings_path_state = SettingsPath(config_path.clone());
+
+            _app.manage(AppStatusState(status_clone.clone()));
+            _app.manage(ObsWsState(obs_ws_client.clone()));
+            _app.manage(FfmpegState(ffmpeg_process.clone()));
+            _app.manage(settings_state);
+            _app.manage(settings_path_state);
+
             let obs_ws_client_clone = obs_ws_client.clone();
             let ffmpeg_process_clone = ffmpeg_process.clone();
 
@@ -527,7 +529,7 @@ pub fn run() {
 
             Ok(())
         })
-        .run(ctx)
+        .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 

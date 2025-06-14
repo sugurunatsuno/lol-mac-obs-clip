@@ -1,17 +1,18 @@
-use tauri::api::process::{Command, CommandChild};
 use std::sync::Arc;
+use tauri::App;
 use tokio::sync::Mutex as AsyncMutex;
 use std::path::PathBuf;
-use dirs;
+use std::process::{Command};
+use std::process::Child as CommandChild;
+use tauri::Manager;
 
 use crate::lol::LolEvent;
 use serde::Serialize;
 use tokio::fs;
 
 /// Download or locate ffmpeg binary
-pub async fn ensure_ffmpeg_path(config: &tauri::Config) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let mut dir = tauri::api::path::app_local_data_dir(config)
-        .ok_or("no data dir")?;
+pub async fn ensure_ffmpeg_path(app: &App) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut dir = app.path().app_local_data_dir().unwrap();
     dir.push("ffmpeg");
     fs::create_dir_all(&dir).await?;
     let bin_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
@@ -119,7 +120,7 @@ impl FfmpegProcess {
         fs::create_dir_all(&dir).await.map_err(|e| e.to_string())?;
 
         let gop = self.fps * self.segment_seconds;
-        let (mut rx, child) = Command::new(&self.ffmpeg_path)
+        let child = Command::new(&self.ffmpeg_path)
             .args([
                 "-f",
                 "avfoundation",
@@ -168,9 +169,6 @@ impl FfmpegProcess {
             ])
             .spawn()
             .map_err(|e| e.to_string())?;
-        tauri::async_runtime::spawn(async move {
-            while rx.recv().await.is_some() {}
-        });
 
         self.child = Some(child);
         self.ram_device = Some(dev);
@@ -179,7 +177,7 @@ impl FfmpegProcess {
     }
 
     pub async fn stop(&mut self) -> Result<(), String> {
-        if let Some(child) = self.child.take() {
+        if let Some(mut child) = self.child.take() {
             let _ = child.kill();
         }
         if let Some(dir) = &self.ram_dir {
