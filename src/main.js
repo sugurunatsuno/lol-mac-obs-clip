@@ -17,7 +17,8 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
+  await loadSettings();
   // 各ボタンにイベントリスナーを設定
   document.getElementById('modeToggle').addEventListener('change', async (e) => {
     const mode = e.target.checked ? 'Shell' : 'Obs';
@@ -63,6 +64,10 @@ window.addEventListener("DOMContentLoaded", () => {
     logEvent(`📁 保存ディレクトリ: ${dir}`);
   });
 
+  document.getElementById('btnSaveSettings').addEventListener('click', async () => {
+    await saveSettings();
+  });
+
   setInterval(updateStatus, 1500);
   updateStatus();
 });
@@ -83,4 +88,25 @@ function logEvent(message) {
   const entry = document.createElement('li');
   entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
   log.prepend(entry);
+}
+
+async function loadSettings() {
+  const s = await invoke('load_settings_cmd');
+  document.getElementById('segmentSeconds').value = s.segment_seconds;
+  document.getElementById('fpsInput').value = s.fps;
+  document.getElementById('videoSourceInput').value = s.video_source;
+  document.getElementById('audioSourceInput').value = s.audio_source;
+  document.getElementById('modeToggle').checked = s.recording_mode === 'Shell';
+}
+
+async function saveSettings() {
+  const settings = {
+    segment_seconds: parseInt(document.getElementById('segmentSeconds').value, 10),
+    fps: parseInt(document.getElementById('fpsInput').value, 10),
+    video_source: document.getElementById('videoSourceInput').value,
+    audio_source: document.getElementById('audioSourceInput').value,
+    recording_mode: document.getElementById('modeToggle').checked ? 'Shell' : 'Obs'
+  };
+  await invoke('save_settings_cmd', { settings });
+  logEvent('⚙️ 設定を保存しました');
 }
