@@ -92,8 +92,13 @@ impl FfmpegProcess {
     }
 
     pub async fn start(&mut self) -> Result<(), String> {
+        if let Some(child) = self.child.as_mut() {
+            if child.try_wait().map_err(|e| e.to_string())?.is_none() {
+                return Ok(());
+            }
+        }
         if self.child.is_some() {
-            return Ok(());
+            self.stop().await?;
         }
         const WRAP: u32 = 11;
         const RAM_MB: u32 = 512;
