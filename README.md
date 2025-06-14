@@ -46,8 +46,10 @@ Start the LoL client before launching the app. The client exposes an API that th
 2. Start the League of Legends client and this application.
 3. When a highlight occurs, press the **Clip** button (or configured hotkey) to save the OBS replay buffer.
 4. Saved videos can be opened from within the app for playback.
-5. Optionally choose to encode clips with ffmpeg for easier sharing.
-6. Use the **設定保存** button to persist your current options. They are loaded automatically on startup.
+5. Each clip is accompanied by a `replay_<timestamp>.json` file listing all LoL events
+   from the clip duration along with their offsets from the start of the video.
+6. Optionally choose to encode clips with ffmpeg for easier sharing.
+7. Use the **設定保存** button to persist your current options. They are loaded automatically on startup.
 
 ## `ffmpeg_replaybuffer.sh` (macOS)
 
