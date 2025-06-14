@@ -5,9 +5,14 @@
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="vendor/bootstrap/bootstrap.min.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LoL Clip Tool</title>
+    <title>Video Detail - LoL Clip Tool</title>
     <script defer src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
-    <script type="module" src="/main.js" defer></script>
+    <link
+      rel="stylesheet"
+      href="https://vjs.zencdn.net/8.3.0/video-js.min.css"
+    />
+    <script src="https://vjs.zencdn.net/8.3.0/video.min.js"></script>
+    <script type="module" src="/viewer.js" defer></script>
   </head>
   <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
@@ -21,12 +26,14 @@
       </div>
     </nav>
     <main class="container py-4 app-container">
-      <h1 class="mb-4 text-center">LoL OBS Clip Tool</h1>
-      <p class="text-center">Welcome! Use this tool to record your highlights.</p>
-      <div class="d-flex justify-content-center gap-3">
-        <a href="settings.html" class="btn btn-primary">Go to Settings</a>
-        <a href="videos.html" class="btn btn-secondary">View Saved Videos</a>
-      </div>
+      <h1 id="fileName" class="mb-4 text-center"></h1>
+      <video
+        id="player"
+        class="video-js vjs-default-skin w-100"
+        controls
+        preload="auto"
+        style="max-width: 720px;"
+      ></video>
     </main>
   </body>
 </html>
