@@ -382,6 +382,9 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
             .output()
             .await
             .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
 
         let stderr_output = String::from_utf8_lossy(&output.stderr);
         let mut current: Option<&str> = None;
@@ -421,11 +424,17 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
             .output()
             .await
             .map_err(|e| e.to_string())?;
+        if !audio_out.status.success() {
+            return Err(String::from_utf8_lossy(&audio_out.stderr).to_string());
+        }
         let video_out = Command::new("v4l2-ctl")
             .arg("--list-devices")
             .output()
             .await
             .map_err(|e| e.to_string())?;
+        if !video_out.status.success() {
+            return Err(String::from_utf8_lossy(&video_out.stderr).to_string());
+        }
 
         for line in String::from_utf8_lossy(&audio_out.stdout).lines() {
             let trimmed = line.trim();
@@ -455,6 +464,9 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
             .output()
             .await
             .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
 
         let stderr_output = String::from_utf8_lossy(&output.stderr);
         let mut current: Option<&str> = None;
