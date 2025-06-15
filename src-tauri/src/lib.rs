@@ -382,7 +382,12 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
             .output()
             .await
             .map_err(|e| e.to_string())?;
-        if !output.status.success() {
+        if output.status.success() {
+
+            // println!("ffmpeg command failed with status: {}", output.status);
+            // println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+            // println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+
             return Err(String::from_utf8_lossy(&output.stderr).to_string());
         }
 
@@ -677,7 +682,7 @@ where
                 }
             }
             Err(e) => {
-                eprintln!("Error fetching LoL events: {}", e);
+                // eprintln!("Error fetching LoL events: {}", e);
             }
         }
 
