@@ -8,7 +8,7 @@ if [[ "$OS" == "Darwin" ]]; then
     # macOS用: AVFoundationデバイス一覧取得＆パース
     ffmpeg -f avfoundation -list_devices true -i "" 2>&1 \
     | grep -E "^\[AVFoundation (audio|video) devices\]|\[[0-9]+\]" \
-    | sed -E 's/^\[AVFoundation [a-z]+ devices\]//;s/^\[[0-9]+\] //;s/^[[:space:]]+//'
+    | sed -E 's/^\[AVFoundation video devices\]/Video devices:/;s/^\[AVFoundation audio devices\]/Audio devices:/;s/^\[[0-9]+\] //;s/^[[:space:]]+//'
 elif [[ "$OS" == "Linux" ]]; then
     # Linux用: ALSA, v4l2デバイス
     echo "Audio devices (ALSA):"
