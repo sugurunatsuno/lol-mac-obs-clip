@@ -4,6 +4,7 @@ use tokio::sync::Mutex as AsyncMutex;
 use std::time::Duration;
 use std::collections::HashSet;
 use tokio::process::Command;
+use std::process::Stdio;
 use tokio::fs;
 use reqwest::Client;
 use tauri::{async_runtime::spawn, Manager};
@@ -363,52 +364,144 @@ struct DeviceList {
 
 #[tauri::command]
 async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
-    let output = Command::new("bash")
-        .arg("list_device.sh")
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let mut video = Vec::new();
     let mut audio = Vec::new();
-    let mut current: Option<&str> = None;
 
-    for line in stdout.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let lower = trimmed.to_lowercase();
-        if lower.contains("video devices") {
-            current = Some("video");
-            continue;
-        }
-        if lower.contains("audio devices") {
-            current = Some("audio");
-            continue;
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("ffmpeg")
+            .stderr(Stdio::piped())
+            .args([
+                "-f",
+                "avfoundation",
+                "-list_devices",
+                "true",
+                "-i",
+                "",
+            ])
+            .output()
+            .await
+            .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
         }
 
-        let name = trimmed
-            .trim_start_matches('[')
-            .trim_start_matches(|c: char| c.is_ascii_digit())
-            .trim_start_matches(']')
-            .trim();
+        let stderr_output = String::from_utf8_lossy(&output.stderr);
+        let mut current: Option<&str> = None;
+        for line in stderr_output.lines() {
+            let trimmed = line.trim();
+            if trimmed.contains("AVFoundation video devices") {
+                current = Some("video");
+                continue;
+            }
+            if trimmed.contains("AVFoundation audio devices") {
+                current = Some("audio");
+                continue;
+            }
+            if let Some(pos) = trimmed.find("] [") {
+                if let Some(end) = trimmed[pos + 3..].find(']') {
+                    let name = trimmed[pos + 3 + end + 1..].trim();
+                    match current {
+                        Some("video") => {
+                            let index = video.len() as i32;
+                            video.push(DeviceInfo { index, name: name.to_string() });
+                        }
+                        Some("audio") => {
+                            let index = audio.len() as i32;
+                            audio.push(DeviceInfo { index, name: name.to_string() });
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
 
-        match current {
-            Some("video") => {
+    #[cfg(target_os = "linux")]
+    {
+        let audio_out = Command::new("arecord")
+            .arg("-l")
+            .output()
+            .await
+            .map_err(|e| e.to_string())?;
+        if !audio_out.status.success() {
+            return Err(String::from_utf8_lossy(&audio_out.stderr).to_string());
+        }
+        let video_out = Command::new("v4l2-ctl")
+            .arg("--list-devices")
+            .output()
+            .await
+            .map_err(|e| e.to_string())?;
+        if !video_out.status.success() {
+            return Err(String::from_utf8_lossy(&video_out.stderr).to_string());
+        }
+
+        for line in String::from_utf8_lossy(&audio_out.stdout).lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("card") {
+                let index = audio.len() as i32;
+                audio.push(DeviceInfo { index, name: trimmed.to_string() });
+            }
+        }
+
+        for line in String::from_utf8_lossy(&video_out.stdout).lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            if !line.starts_with(' ') && !line.starts_with('\t') {
+                let name = line.trim_end_matches(':').trim();
                 let index = video.len() as i32;
                 video.push(DeviceInfo { index, name: name.to_string() });
             }
-            Some("audio") => {
-                let index = audio.len() as i32;
-                audio.push(DeviceInfo { index, name: name.to_string() });
-            }
-            _ => {}
         }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("ffmpeg")
+            .stderr(Stdio::piped())
+            .args(["-list_devices", "true", "-f", "dshow", "-i", "dummy"])
+            .output()
+            .await
+            .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        let stderr_output = String::from_utf8_lossy(&output.stderr);
+        let mut current: Option<&str> = None;
+        for line in stderr_output.lines() {
+            let trimmed = line.trim();
+            if trimmed.contains("DirectShow video devices") {
+                current = Some("video");
+                continue;
+            }
+            if trimmed.contains("DirectShow audio devices") {
+                current = Some("audio");
+                continue;
+            }
+            if let Some(start) = trimmed.find('"') {
+                if let Some(end) = trimmed[start + 1..].find('"') {
+                    let name = &trimmed[start + 1..start + 1 + end];
+                    match current {
+                        Some("video") => {
+                            let index = video.len() as i32;
+                            video.push(DeviceInfo { index, name: name.to_string() });
+                        }
+                        Some("audio") => {
+                            let index = audio.len() as i32;
+                            audio.push(DeviceInfo { index, name: name.to_string() });
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        return Err("Unsupported OS".into());
     }
 
     Ok(DeviceList { video, audio })
