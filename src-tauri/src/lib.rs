@@ -362,18 +362,9 @@ struct DeviceList {
 }
 
 #[tauri::command]
-async fn list_ffmpeg_devices(state: tauri::State<'_, FfmpegState>) -> Result<DeviceList, String> {
-    let ffmpeg_path = {
-        let proc = state.0.lock().await;
-        proc.ffmpeg_path.clone()
-    };
-    let output = Command::new(ffmpeg_path)
-        .arg("-f")
-        .arg("avfoundation")
-        .arg("-list_devices")
-        .arg("true")
-        .arg("-i")
-        .arg("")
+async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
+    let output = Command::new("bash")
+        .arg("list_device.sh")
         .output()
         .await
         .map_err(|e| e.to_string())?;
@@ -381,36 +372,42 @@ async fn list_ffmpeg_devices(state: tauri::State<'_, FfmpegState>) -> Result<Dev
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
     let mut video = Vec::new();
     let mut audio = Vec::new();
-    let mut current = None::<&str>;
+    let mut current: Option<&str> = None;
 
-    for line in stderr.lines() {
-        if line.contains("AVFoundation video devices") {
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let lower = trimmed.to_lowercase();
+        if lower.contains("video devices") {
             current = Some("video");
             continue;
         }
-        if line.contains("AVFoundation audio devices") {
+        if lower.contains("audio devices") {
             current = Some("audio");
             continue;
         }
-        if let Some(kind) = current {
-            let trimmed = line.trim();
-            if let Some(start) = trimmed.find('[') {
-                if let Some(end) = trimmed[start + 1..].find(']') {
-                    let idx_str = &trimmed[start + 1..start + 1 + end];
-                    if let Ok(index) = idx_str.parse::<i32>() {
-                        let name = trimmed[start + 1 + end + 1..].trim();
-                        let info = DeviceInfo { index, name: name.to_string() };
-                        match kind {
-                            "video" => video.push(info),
-                            "audio" => audio.push(info),
-                            _ => {}
-                        }
-                    }
-                }
+
+        let name = trimmed
+            .trim_start_matches('[')
+            .trim_start_matches(|c: char| c.is_ascii_digit())
+            .trim_start_matches(']')
+            .trim();
+
+        match current {
+            Some("video") => {
+                let index = video.len() as i32;
+                video.push(DeviceInfo { index, name: name.to_string() });
             }
+            Some("audio") => {
+                let index = audio.len() as i32;
+                audio.push(DeviceInfo { index, name: name.to_string() });
+            }
+            _ => {}
         }
     }
 
