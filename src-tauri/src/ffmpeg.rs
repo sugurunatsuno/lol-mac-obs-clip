@@ -174,7 +174,6 @@ impl FfmpegProcess {
 
         self.child = Some(child);
 
-        self.ram_device = Some(dev.clone());
         self.ram_dir = Some(dir.clone());
 
         let save_path = dir.join(".trigger_save");

@@ -90,7 +90,7 @@ async fn start_recording(
         RecordingMode::Shell => {
             let shared = ffmpeg_state.0.clone();
             let mut proc = shared.lock().await;
-            proc.start(shared).await
+            proc.start(shared.clone()).await
         }
     }
 }
@@ -141,7 +141,7 @@ async fn start_replay_buffer(
         RecordingMode::Shell => {
             let shared = ffmpeg_state.0.clone();
             let mut proc = shared.lock().await;
-            proc.start(shared).await
+            proc.start(shared.clone()).await
         }
     }
 }
