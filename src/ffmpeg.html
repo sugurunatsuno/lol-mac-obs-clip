@@ -5,7 +5,7 @@
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="vendor/bootstrap/bootstrap.min.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Settings - LoL Clip Tool</title>
+    <title>FFmpeg Mode - LoL Clip Tool</title>
     <script type="module" src="/settings.js" defer></script>
     <script defer src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
   </head>
@@ -15,8 +15,9 @@
       <div class="container-fluid">
         <a class="navbar-brand" href="index.html">Clip Tool</a>
         <div class="navbar-nav">
-          <a class="nav-link" href="index.html">Top</a>
-          <a class="nav-link" href="settings.html">Settings</a>
+          <a class="nav-link" href="index.html">Home</a>
+          <a class="nav-link" href="obs.html">OBS Mode</a>
+          <a class="nav-link" href="ffmpeg.html">FFmpeg Mode</a>
           <a class="nav-link" href="videos.html">Videos</a>
         </div>
       </div>
@@ -27,7 +28,7 @@
       <div class="status-panel mb-3">
         <div><strong>ゲーム状態:</strong> <span id="gameState"></span></div>
         <div><strong>OBS状態:</strong> <span id="obsState"></span></div>
-        <div class="form-check form-switch mode-toggle">
+        <div class="form-check form-switch mode-toggle" style="display:none;">
           <input class="form-check-input" type="checkbox" id="modeToggle" />
           <label class="form-check-label" for="modeToggle">シェル録画を使用</label>
         </div>
@@ -88,5 +89,6 @@
       </div>
     </main>
 
+    <script>window.addEventListener("DOMContentLoaded",()=>{const t=document.getElementById("modeToggle");if(t){t.checked=true;t.disabled=true;}});</script>
   </body>
 </html>

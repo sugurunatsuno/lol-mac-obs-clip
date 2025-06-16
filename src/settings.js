@@ -2,15 +2,17 @@ const { invoke } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
 
 window.addEventListener("DOMContentLoaded", async () => {
-  await loadDevices();
+  if (document.getElementById('videoSourceInput')) {
+    await loadDevices();
+  }
   await loadSettings();
   // 各ボタンにイベントリスナーを設定
-  document.getElementById('modeToggle').addEventListener('change', async (e) => {
+  document.getElementById('modeToggle')?.addEventListener('change', async (e) => {
     const mode = e.target.checked ? 'Shell' : 'Obs';
     await invoke('set_recording_mode', { mode });
     updateStatus();
   });
-  document.getElementById('btnStart').addEventListener('click', async () => {
+  document.getElementById('btnStart')?.addEventListener('click', async () => {
     try {
       await invoke('start_recording');
       logEvent("🎥 録画を開始しました");
@@ -20,7 +22,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     updateStatus();
   });
 
-  document.getElementById('btnStop').addEventListener('click', async () => {
+  document.getElementById('btnStop')?.addEventListener('click', async () => {
     try {
       await invoke('stop_recording');
       logEvent("⏹ 録画を停止しました");
@@ -30,7 +32,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     updateStatus();
   });
 
-  document.getElementById('btnReplayStart').addEventListener('click', async () => {
+  document.getElementById('btnReplayStart')?.addEventListener('click', async () => {
     const isShell = document.getElementById('modeToggle').checked;
     if (isShell) {
       const segmentSeconds = parseInt(document.getElementById('segmentSeconds').value, 10);
@@ -56,7 +58,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     updateStatus();
   });
 
-  document.getElementById('btnReplayStop').addEventListener('click', async () => {
+  document.getElementById('btnReplayStop')?.addEventListener('click', async () => {
     const isShell = document.getElementById('modeToggle').checked;
     try {
       if (isShell) {
@@ -71,7 +73,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     updateStatus();
   });
 
-  document.getElementById('btnReplaySave').addEventListener('click', async () => {
+  document.getElementById('btnReplaySave')?.addEventListener('click', async () => {
     const isShell = document.getElementById('modeToggle').checked;
     try {
       if (isShell) {
@@ -86,7 +88,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     updateStatus();
   });
 
-  document.getElementById('chooseDirBtn').addEventListener('click', async () => {
+  document.getElementById('chooseDirBtn')?.addEventListener('click', async () => {
     const selected = await open({ directory: true });
     if (selected) {
       document.getElementById('saveDirInput').value = selected;
@@ -94,12 +96,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  document.getElementById('btnGetDir').addEventListener('click', async () => {
+  document.getElementById('btnGetDir')?.addEventListener('click', async () => {
     const dir = await invoke('get_saved_directory');
     await open(dir);
   });
 
-  document.getElementById('btnSaveSettings').addEventListener('click', async () => {
+  document.getElementById('btnSaveSettings')?.addEventListener('click', async () => {
     await saveSettings();
   });
 
@@ -112,10 +114,14 @@ async function updateStatus() {
   document.getElementById('gameState').textContent = status.game_state;
   document.getElementById('obsState').textContent = status.obs_state;
   const toggle = document.getElementById('modeToggle');
-  toggle.checked = status.recording_mode === 'Shell';
-  toggle.disabled = status.is_recording;
+  if (toggle) {
+    toggle.checked = status.recording_mode === 'Shell';
+    toggle.disabled = status.is_recording;
+  }
   const saveBtn = document.getElementById('btnReplaySave');
-  saveBtn.disabled = !status.replay_buffer_running;
+  if (saveBtn) {
+    saveBtn.disabled = !status.replay_buffer_running;
+  }
 }
 
 function logEvent(message) {
@@ -127,21 +133,30 @@ function logEvent(message) {
 
 async function loadSettings() {
   const s = await invoke('load_settings_cmd');
-  document.getElementById('segmentSeconds').value = s.segment_seconds;
-  document.getElementById('fpsInput').value = s.fps;
-  document.getElementById('videoSourceInput').value = s.video_source;
-  document.getElementById('audioSourceInput').value = s.audio_source;
-  document.getElementById('wrapCountInput').value = s.wrap_count;
-  document.getElementById('bitrateInput').value = s.bitrate;
-  document.getElementById('modeToggle').checked = s.recording_mode === 'Shell';
-  document.getElementById('saveDirInput').value = s.save_dir;
+  const seg = document.getElementById('segmentSeconds');
+  if (seg) seg.value = s.segment_seconds;
+  const fps = document.getElementById('fpsInput');
+  if (fps) fps.value = s.fps;
+  const vsrc = document.getElementById('videoSourceInput');
+  if (vsrc) vsrc.value = s.video_source;
+  const asrc = document.getElementById('audioSourceInput');
+  if (asrc) asrc.value = s.audio_source;
+  const wrap = document.getElementById('wrapCountInput');
+  if (wrap) wrap.value = s.wrap_count;
+  const br = document.getElementById('bitrateInput');
+  if (br) br.value = s.bitrate;
+  const toggle = document.getElementById('modeToggle');
+  if (toggle) toggle.checked = s.recording_mode === 'Shell';
+  const dir = document.getElementById('saveDirInput');
+  if (dir) dir.value = s.save_dir;
 }
 
 async function loadDevices() {
+  const vSel = document.getElementById('videoSourceInput');
+  const aSel = document.getElementById('audioSourceInput');
+  if (!vSel || !aSel) return;
   try {
     const list = await invoke('list_ffmpeg_devices');
-    const vSel = document.getElementById('videoSourceInput');
-    const aSel = document.getElementById('audioSourceInput');
     vSel.innerHTML = '';
     list.video.forEach((d) => {
       const opt = document.createElement('option');
@@ -162,16 +177,24 @@ async function loadDevices() {
 }
 
 async function saveSettings() {
-  const settings = {
-    segment_seconds: parseInt(document.getElementById('segmentSeconds').value, 10),
-    fps: parseInt(document.getElementById('fpsInput').value, 10),
-    video_source: document.getElementById('videoSourceInput').value,
-    audio_source: document.getElementById('audioSourceInput').value,
-    wrap_count: parseInt(document.getElementById('wrapCountInput').value, 10),
-    bitrate: document.getElementById('bitrateInput').value,
-    recording_mode: document.getElementById('modeToggle').checked ? 'Shell' : 'Obs',
-    save_dir: document.getElementById('saveDirInput').value
-  };
+  const base = await invoke('load_settings_cmd');
+  const settings = { ...base };
+  const seg = document.getElementById('segmentSeconds');
+  if (seg) settings.segment_seconds = parseInt(seg.value, 10);
+  const fps = document.getElementById('fpsInput');
+  if (fps) settings.fps = parseInt(fps.value, 10);
+  const vsrc = document.getElementById('videoSourceInput');
+  if (vsrc) settings.video_source = vsrc.value;
+  const asrc = document.getElementById('audioSourceInput');
+  if (asrc) settings.audio_source = asrc.value;
+  const wrap = document.getElementById('wrapCountInput');
+  if (wrap) settings.wrap_count = parseInt(wrap.value, 10);
+  const br = document.getElementById('bitrateInput');
+  if (br) settings.bitrate = br.value;
+  const toggle = document.getElementById('modeToggle');
+  if (toggle) settings.recording_mode = toggle.checked ? 'Shell' : 'Obs';
+  const dir = document.getElementById('saveDirInput');
+  if (dir) settings.save_dir = dir.value;
   await invoke('save_settings_cmd', { settings });
   await invoke('set_saved_directory', { dir: settings.save_dir });
   logEvent('⚙️ 設定を保存しました');
