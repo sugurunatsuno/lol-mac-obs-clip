@@ -140,3 +140,48 @@ pub async fn send_obs_request_wrapper(shared: SharedObsWsClient, command: &str) 
     result
 }
 
+pub async fn set_record_directory(shared: SharedObsWsClient, dir: &str) -> Result<(), String> {
+    let mut needs_connect = false;
+    {
+        let client_guard = shared.lock().unwrap();
+        needs_connect = client_guard.is_none();
+    }
+    if needs_connect {
+        let client = ObsWsClient::connect_and_identify("ws://127.0.0.1:4455")
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut client_guard = shared.lock().unwrap();
+        *client_guard = Some(client);
+    }
+
+    let mut client_opt = {
+        let mut guard = shared.lock().unwrap();
+        guard.take()
+    };
+    use serde_json::json;
+    use tokio_tungstenite::tungstenite::Message;
+    let result = if let Some(ref mut client) = client_opt {
+        let req = json!({
+            "op": 6,
+            "d": {
+                "requestType": "SetRecordDirectory",
+                "requestId": "tauri-lol-obs-002",
+                "requestData": { "recordDirectory": dir }
+            }
+        });
+        client
+            .ws
+            .send(Message::Text(req.to_string()))
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("OBS WS Client not connected".into())
+    };
+    {
+        let mut guard = shared.lock().unwrap();
+        *guard = client_opt;
+    }
+    result
+}
+

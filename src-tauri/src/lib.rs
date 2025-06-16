@@ -17,7 +17,7 @@ mod ffmpeg;
 
 use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState};
 use lol::{AllGameData, LolEvent};
-use obs::{send_obs_command_wrapper, send_obs_request_wrapper, ObsWsState, SharedObsWsClient};
+use obs::{send_obs_command_wrapper, send_obs_request_wrapper, set_record_directory, ObsWsState, SharedObsWsClient};
 use ffmpeg::{FfmpegProcess, FfmpegState, SharedFfmpegProcess, ensure_ffmpeg_path, write_clip_metadata};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -191,16 +191,28 @@ async fn save_replay_buffer(
 }
 
 #[tauri::command]
-async fn get_saved_directory(_state: tauri::State<'_, AppStatusState>, obs_state: tauri::State<'_, ObsWsState>) -> Result<String, String> {
-    let resp = send_obs_request_wrapper(obs_state.0.clone(), "GetRecordDirectory").await?;
-    let dir = resp
-        .get("d")
-        .and_then(|d| d.get("responseData"))
-        .and_then(|rd| rd.get("recordDirectory"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    Ok(dir)
+async fn get_saved_directory(state: tauri::State<'_, SettingsState>) -> Result<String, String> {
+    Ok(state.0.lock().unwrap().save_dir.clone())
+}
+
+#[tauri::command]
+async fn set_saved_directory(
+    dir: String,
+    settings: tauri::State<'_, SettingsState>,
+    path: tauri::State<'_, SettingsPath>,
+    obs_state: tauri::State<'_, ObsWsState>,
+    ffmpeg_state: tauri::State<'_, FfmpegState>,
+) -> Result<(), String> {
+    {
+        let mut set = settings.0.lock().unwrap();
+        set.save_dir = dir.clone();
+        save_settings(&path.0, &set).map_err(|e| e.to_string())?;
+    }
+    {
+        let mut proc = ffmpeg_state.0.lock().await;
+        proc.set_save_dir(PathBuf::from(&dir));
+    }
+    obs::set_record_directory(obs_state.0.clone(), &dir).await
 }
 
 #[derive(Serialize)]
@@ -212,15 +224,9 @@ struct SavedVideoInfo {
 }
 
 #[tauri::command]
-async fn list_saved_videos(obs_state: tauri::State<'_, ObsWsState>) -> Result<Vec<SavedVideoInfo>, String> {
-    let resp = send_obs_request_wrapper(obs_state.0.clone(), "GetRecordDirectory").await?;
-    let dir = resp
-        .get("d")
-        .and_then(|d| d.get("responseData"))
-        .and_then(|rd| rd.get("recordDirectory"))
-        .and_then(|v| v.as_str())
-        .ok_or("no dir")?;
-    let mut entries = fs::read_dir(dir).await.map_err(|e| e.to_string())?;
+async fn list_saved_videos(settings: tauri::State<'_, SettingsState>) -> Result<Vec<SavedVideoInfo>, String> {
+    let dir = settings.0.lock().unwrap().save_dir.clone();
+    let mut entries = fs::read_dir(&dir).await.map_err(|e| e.to_string())?;
     let mut files = Vec::new();
     while let Some(ent) = entries.next_entry().await.map_err(|e| e.to_string())? {
         let path = ent.path();
@@ -287,6 +293,7 @@ async fn save_settings_cmd(
         proc.set_fps(settings.fps);
         proc.set_wrap_count(settings.wrap_count);
         proc.set_bitrate(settings.bitrate.clone());
+        proc.set_save_dir(PathBuf::from(settings.save_dir.clone()));
     }
     save_settings(&path.0, &settings).map_err(|e| e.to_string())
 }
@@ -528,6 +535,7 @@ pub fn run() {
             stop_replay_buffer,
             save_replay_buffer,
             get_saved_directory,
+            set_saved_directory,
             start_ffmpeg_replay,
             stop_ffmpeg_replay,
             save_ffmpeg_clip,
@@ -549,6 +557,7 @@ pub fn run() {
             ffmpeg_proc.set_fps(settings.fps);
             ffmpeg_proc.set_wrap_count(settings.wrap_count);
             ffmpeg_proc.set_bitrate(settings.bitrate.clone());
+            ffmpeg_proc.set_save_dir(PathBuf::from(settings.save_dir.clone()));
 
             let status = AppStatus {
                 game_state: GameState::NotStarted,
@@ -570,6 +579,12 @@ pub fn run() {
             _app.manage(FfmpegState(ffmpeg_process.clone()));
             _app.manage(settings_state);
             _app.manage(settings_path_state);
+
+            let dir = settings.save_dir.clone();
+            let obs_ws_client_clone2 = obs_ws_client.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = set_record_directory(obs_ws_client_clone2, &dir).await;
+            });
 
             let obs_ws_client_clone = obs_ws_client.clone();
             let ffmpeg_process_clone = ffmpeg_process.clone();

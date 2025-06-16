@@ -2,14 +2,15 @@
 set -Eeuo pipefail
 
 FFMPEG_BIN=${FFMPEG_BIN:-ffmpeg}
-FPS=30 BITRATE=20M SRC="1:none" SEG_S=6 WRAP=11 RAM_MB=512
+FPS=30 BITRATE=20M SRC="1:none" SEG_S=6 WRAP=11 RAM_MB=512 OUT_DIR="$HOME/Movies"
 
-while getopts "f:b:s:t:n:r:h" o; do
+while getopts "f:b:s:t:n:r:o:h" o; do
   case $o in
     f) FPS=$OPTARG ;; b) BITRATE=$OPTARG ;;
     s) SRC=$OPTARG ;; t) SEG_S=$OPTARG ;;
     n) WRAP=$OPTARG ;; r) RAM_MB=$OPTARG ;;
-    h|*) echo "usage: $0 [-f fps] [-b bitrate] [-s src] [-t seg_sec] [-n wrap] [-r ram_mb]"; exit 0;;
+    o) OUT_DIR=$OPTARG ;;
+    h|*) echo "usage: $0 [-f fps] [-b bitrate] [-s src] [-t seg_sec] [-n wrap] [-r ram_mb] [-o out_dir]"; exit 0;;
   esac
 done
 
@@ -65,7 +66,7 @@ while true; do
     s)
       ts=$(date +%Y%m%d_%H%M%S)
       "$FFMPEG_BIN" -nostdin -y -live_start_index "$OFFSET" -i "$DIR/list.m3u8" \
-             -t "$DUR" -c copy -movflags +faststart "$HOME/Movies/replay_$ts.mp4"
+             -t "$DUR" -c copy -movflags +faststart "$OUT_DIR/replay_$ts.mp4" 
       echo "📼 saved $ts"
       ;;
     $'\x1b'|q) break ;;

@@ -13,6 +13,8 @@ pub struct AppSettings {
     pub audio_source: String,
     pub wrap_count: u32,
     pub bitrate: String,
+    #[serde(default = "default_save_dir")]
+    pub save_dir: String,
 }
 
 impl Default for AppSettings {
@@ -25,8 +27,16 @@ impl Default for AppSettings {
             audio_source: "none".into(),
             wrap_count: 11,
             bitrate: "20M".into(),
+            save_dir: default_save_dir(),
         }
     }
+}
+
+fn default_save_dir() -> String {
+    use std::path::PathBuf;
+    let mut dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    dir.push("Movies");
+    dir.to_string_lossy().to_string()
 }
 
 pub fn load_settings(path: &Path) -> Option<AppSettings> {
