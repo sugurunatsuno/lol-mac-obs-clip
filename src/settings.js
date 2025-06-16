@@ -30,24 +30,39 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById('btnReplayStart').addEventListener('click', async () => {
-    const segmentSeconds = parseInt(document.getElementById('segmentSeconds').value, 10);
-    const fps = parseInt(document.getElementById('fpsInput').value, 10);
-    const videoSource = document.getElementById('videoSourceInput').value;
-    const audioSource = document.getElementById('audioSourceInput').value;
-    const wrapCount = parseInt(document.getElementById('wrapCountInput').value, 10);
-    const bitrate = document.getElementById('bitrateInput').value;
-    try {
-      await invoke('start_ffmpeg_replay', { segmentSeconds, fps, videoSource, audioSource, wrapCount, bitrate });
-      logEvent("🔁 リプレイバッファを開始しました");
-    } catch (e) {
-      logEvent(`⚠️ リプレイバッファの開始に失敗しました: ${e}`);
+    const isShell = document.getElementById('modeToggle').checked;
+    if (isShell) {
+      const segmentSeconds = parseInt(document.getElementById('segmentSeconds').value, 10);
+      const fps = parseInt(document.getElementById('fpsInput').value, 10);
+      const videoSource = document.getElementById('videoSourceInput').value;
+      const audioSource = document.getElementById('audioSourceInput').value;
+      const wrapCount = parseInt(document.getElementById('wrapCountInput').value, 10);
+      const bitrate = document.getElementById('bitrateInput').value;
+      try {
+        await invoke('start_ffmpeg_replay', { segmentSeconds, fps, videoSource, audioSource, wrapCount, bitrate });
+        logEvent("🔁 リプレイバッファを開始しました");
+      } catch (e) {
+        logEvent(`⚠️ リプレイバッファの開始に失敗しました: ${e}`);
+      }
+    } else {
+      try {
+        await invoke('start_replay_buffer');
+        logEvent("🔁 リプレイバッファを開始しました");
+      } catch (e) {
+        logEvent(`⚠️ リプレイバッファの開始に失敗しました: ${e}`);
+      }
     }
     updateStatus();
   });
 
   document.getElementById('btnReplayStop').addEventListener('click', async () => {
+    const isShell = document.getElementById('modeToggle').checked;
     try {
-      await invoke('stop_ffmpeg_replay');
+      if (isShell) {
+        await invoke('stop_ffmpeg_replay');
+      } else {
+        await invoke('stop_replay_buffer');
+      }
       logEvent("⏸ リプレイバッファを停止しました");
     } catch (e) {
       logEvent(`⚠️ リプレイバッファの停止に失敗しました: ${e}`);
@@ -56,8 +71,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById('btnReplaySave').addEventListener('click', async () => {
+    const isShell = document.getElementById('modeToggle').checked;
     try {
-      await invoke('save_ffmpeg_clip');
+      if (isShell) {
+        await invoke('save_ffmpeg_clip');
+      } else {
+        await invoke('save_replay_buffer');
+      }
       logEvent("💾 リプレイバッファを保存しました");
     } catch (e) {
       logEvent(`⚠️ リプレイバッファの保存に失敗しました: ${e}`);
