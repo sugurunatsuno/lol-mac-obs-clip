@@ -107,3 +107,14 @@ The application stores its own ffmpeg binary under the directory returned by
 `~/Library/Application Support/<app>/ffmpeg/ffmpeg`. Replace the binary there to
 update or override the version shipped by default.
 
+## Screen and Function Mapping
+
+The frontend now has **five** HTML pages: Home, OBS Mode, FFmpeg Mode, Saved Videos, and Video Detail. Each page links to the others via the shared navigation bar.
+
+| Screen | File | Transitions | Invoked Commands |
+|-------|------|-------------|------------------|
+| **Home** | `index.html` | Links to **OBS Mode**, **FFmpeg Mode**, **Videos** | – |
+| **OBS Mode** | `obs.html` | Navbar links to all screens | `get_status`, `start_recording`, `stop_recording`, `start_replay_buffer`, `stop_replay_buffer`, `save_replay_buffer`, `load_settings_cmd`, `save_settings_cmd`, `set_saved_directory`, `get_saved_directory` |
+| **FFmpeg Mode** | `ffmpeg.html` | Navbar links to all screens | `get_status`, `start_recording`, `stop_recording`, `start_ffmpeg_replay`, `stop_ffmpeg_replay`, `save_ffmpeg_clip`, `list_ffmpeg_devices`, `load_settings_cmd`, `save_settings_cmd`, `set_saved_directory`, `get_saved_directory` |
+| **Saved Videos** | `videos.html` | Navbar links to all screens. Entries open **Video Detail**. | `list_saved_videos` |
+| **Video Detail** | `video.html` | Navbar links to all screens | – (uses `convertFileSrc` for local playback) |
