@@ -33,7 +33,7 @@ The commands above require that the Rust toolchain is installed since Tauri comp
 
 1. Install the OBS WebSocket plugin and restart OBS.
 2. Open *Tools → WebSocket Server Settings* and enable the server (default port `4455`).
-3. Configure your recording or replay buffer path in OBS.
+3. Configure your recording or replay buffer path in OBS or set it from the application's settings.
 4. Use the same port and password (if set) in this application's settings so it can control OBS.
 
 ## League of Legends Setup
@@ -49,7 +49,7 @@ Start the LoL client before launching the app. The client exposes an API that th
 5. Each clip is accompanied by a `replay_<timestamp>.json` file listing all LoL events
    from the clip duration along with their offsets from the start of the video.
 6. Optionally choose to encode clips with ffmpeg for easier sharing.
-7. Use the **設定保存** button to persist your current options. They are loaded automatically on startup.
+7. Use the **設定保存** button to persist your current options. They are loaded automatically on startup. You can also set the folder where recordings and clips are saved from the settings screen. The same path is used for OBS recordings and ffmpeg clips.
 
 ## `ffmpeg_replaybuffer.sh` (macOS)
 
@@ -73,9 +73,10 @@ Parameters:
 - `-t SEG_S` – length of each segment in seconds (default `6`).
 - `-n WRAP` – number of segments kept in the buffer (default `11`).
 - `-r RAM_MB` – size of the RAM disk in megabytes (default `512`).
+- `-o OUT_DIR` – directory where saved clips are written (default `~/Movies`).
 
 While the script is running it displays `REC ▶︎`. Press **s** at any time to
-save the most recent replay buffer to `$HOME/Movies` as
+save the most recent replay buffer to the specified output directory (default `~/Movies`) as
 `replay_<timestamp>.mp4`. Press **Esc** or **q** to quit.
 
 Once integrated with the Tauri app, the application will spawn this script

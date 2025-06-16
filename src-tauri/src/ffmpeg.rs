@@ -10,6 +10,12 @@ use crate::lol::LolEvent;
 use serde::Serialize;
 use tokio::fs;
 
+fn default_save_dir_path() -> PathBuf {
+    let mut dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    dir.push("Movies");
+    dir
+}
+
 /// Download or locate ffmpeg binary
 pub async fn ensure_ffmpeg_path(app: &App) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let mut dir = app.path().app_local_data_dir().unwrap();
@@ -56,6 +62,7 @@ pub struct FfmpegProcess {
     pub fps: u32,
     pub wrap_count: u32,
     pub bitrate: String,
+    pub save_dir: PathBuf,
 }
 
 impl FfmpegProcess {
@@ -71,6 +78,7 @@ impl FfmpegProcess {
             fps: 30,
             wrap_count: 11,
             bitrate: "20M".into(),
+            save_dir: default_save_dir_path(),
         }
     }
 
@@ -100,6 +108,10 @@ impl FfmpegProcess {
 
     pub fn set_bitrate(&mut self, bitrate: String) {
         self.bitrate = bitrate;
+    }
+
+    pub fn set_save_dir(&mut self, dir: PathBuf) {
+        self.save_dir = dir;
     }
 
     pub async fn start(&mut self, shared: SharedFfmpegProcess) -> Result<(), String> {
@@ -222,8 +234,7 @@ impl FfmpegProcess {
         let offset = -(self.wrap_count as i32 - 1);
         let dur = self.segment_seconds * (self.wrap_count - 1);
         let ts = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
-        let mut out = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-        out.push("Movies");
+        let mut out = self.save_dir.clone();
         fs::create_dir_all(&out).await.map_err(|e| e.to_string())?;
         out.push(format!("replay_{}.mp4", ts));
 

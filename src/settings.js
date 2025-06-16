@@ -1,4 +1,5 @@
 const { invoke } = window.__TAURI__.core;
+const { open } = window.__TAURI__.dialog;
 
 window.addEventListener("DOMContentLoaded", async () => {
   await loadDevices();
@@ -85,9 +86,17 @@ window.addEventListener("DOMContentLoaded", async () => {
     updateStatus();
   });
 
+  document.getElementById('chooseDirBtn').addEventListener('click', async () => {
+    const selected = await open({ directory: true });
+    if (selected) {
+      document.getElementById('saveDirInput').value = selected;
+      await invoke('set_saved_directory', { dir: selected });
+    }
+  });
+
   document.getElementById('btnGetDir').addEventListener('click', async () => {
     const dir = await invoke('get_saved_directory');
-    logEvent(`📁 保存ディレクトリ: ${dir}`);
+    await open(dir);
   });
 
   document.getElementById('btnSaveSettings').addEventListener('click', async () => {
@@ -125,6 +134,7 @@ async function loadSettings() {
   document.getElementById('wrapCountInput').value = s.wrap_count;
   document.getElementById('bitrateInput').value = s.bitrate;
   document.getElementById('modeToggle').checked = s.recording_mode === 'Shell';
+  document.getElementById('saveDirInput').value = s.save_dir;
 }
 
 async function loadDevices() {
@@ -159,8 +169,10 @@ async function saveSettings() {
     audio_source: document.getElementById('audioSourceInput').value,
     wrap_count: parseInt(document.getElementById('wrapCountInput').value, 10),
     bitrate: document.getElementById('bitrateInput').value,
-    recording_mode: document.getElementById('modeToggle').checked ? 'Shell' : 'Obs'
+    recording_mode: document.getElementById('modeToggle').checked ? 'Shell' : 'Obs',
+    save_dir: document.getElementById('saveDirInput').value
   };
   await invoke('save_settings_cmd', { settings });
+  await invoke('set_saved_directory', { dir: settings.save_dir });
   logEvent('⚙️ 設定を保存しました');
 }
