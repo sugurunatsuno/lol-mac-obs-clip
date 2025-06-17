@@ -8,9 +8,23 @@
   font-weight: 400;
 
   color: #1f2937; /* gray-800 */
-  background-color: #5c5c5c; /* gray-50 */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
 
-  font-synthesis: none;
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+  flex: 1;
+  width: 100%;
+  padding: 1rem;
+  overflow: hidden;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -83,9 +97,9 @@ h1 {
 }
 
 .log-container {
-  margin-top: 2rem;
+  margin-top: 1rem;
   text-align: left;
-  max-height: 300px;
+  flex: 1 1 auto;
   overflow-y: auto;
   border: 1px solid #d1d5db; /* gray-300 */
   padding: 1rem;
