@@ -1,4 +1,4 @@
-const { convertFileSrc } = window.__TAURI__.core;
+const { convertFileSrc, invoke } = window.__TAURI__.core;
 function eventColor(name) {
   switch (name) {
     case "ChampionKill":
@@ -63,16 +63,13 @@ function init() {
   }
 
 
-  // Load metadata JSON if available
-  const metadataPath = file.replace(/\.[^/.]+$/, '.json');
   let events = [];
-  fetch(convertFileSrc(metadataPath))
-    .then((r) => (r.ok ? r.json() : null))
+  invoke('get_clip_metadata', { path: file })
     .then((data) => {
-      if (data && Array.isArray(data.events)) {
-        events = data.events;
+      if (Array.isArray(data)) {
+        events = data;
       }
-        addMarkers();
+      addMarkers();
     })
     .catch(() => {
       /* ignore errors */

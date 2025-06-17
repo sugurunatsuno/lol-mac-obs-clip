@@ -14,11 +14,13 @@ mod settings;
 mod lol;
 mod obs;
 mod ffmpeg;
+mod db;
 
 use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState};
 use lol::{AllGameData, LolEvent};
 use obs::{send_obs_command_wrapper, send_obs_request_wrapper, set_record_directory, ObsWsState, SharedObsWsClient};
 use ffmpeg::{FfmpegProcess, FfmpegState, SharedFfmpegProcess, ensure_ffmpeg_path, write_clip_metadata};
+use db::{DbPath, init_db, get_clip_events, list_clips, cleanup_orphan_clips};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 enum GameState {
@@ -224,44 +226,28 @@ struct SavedVideoInfo {
 }
 
 #[tauri::command]
-async fn list_saved_videos(settings: tauri::State<'_, SettingsState>) -> Result<Vec<SavedVideoInfo>, String> {
-    let dir = settings.0.lock().unwrap().save_dir.clone();
-    let mut entries = fs::read_dir(&dir).await.map_err(|e| e.to_string())?;
+async fn list_saved_videos(db: tauri::State<'_, DbPath>) -> Result<Vec<SavedVideoInfo>, String> {
+    cleanup_orphan_clips(&db.0).await?;
+    let clips = list_clips(&db.0).await?;
     let mut files = Vec::new();
-    while let Some(ent) = entries.next_entry().await.map_err(|e| e.to_string())? {
-        let path = ent.path();
-        if path.is_file() {
-            if let Some(ext) = path.extension() {
-                if ext == "mp4" || ext == "mkv" || ext == "mov" {
-                    let name = path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    let (modified, size) = match ent.metadata().await {
-                        Ok(meta) => {
-                            let modified = meta
-                                .modified()
-                                .ok()
-                                .map(|t| {
-                                    let dt: chrono::DateTime<chrono::Local> = t.into();
-                                    dt.format("%Y-%m-%d %H:%M:%S").to_string()
-                                })
-                                .unwrap_or_default();
-                            (modified, meta.len())
-                        }
-                        Err(_) => (String::new(), 0),
-                    };
-                    files.push(SavedVideoInfo {
-                        path: path.to_string_lossy().to_string(),
-                        name,
-                        modified,
-                        size,
-                    });
-                }
-            }
-        }
+    for (path, created, size) in clips {
+        let name = std::path::Path::new(&path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        files.push(SavedVideoInfo {
+            path,
+            name,
+            modified: created,
+            size,
+        });
     }
     Ok(files)
+}
+
+#[tauri::command]
+async fn get_clip_metadata(path: String, db: tauri::State<'_, DbPath>) -> Result<Vec<db::EventWithOffset>, String> {
+    get_clip_events(&db.0, std::path::Path::new(&path)).await
 }
 
 #[tauri::command]
@@ -541,6 +527,7 @@ pub fn run() {
             save_ffmpeg_clip,
             list_ffmpeg_devices,
             list_saved_videos,
+            get_clip_metadata,
             load_settings_cmd,
             save_settings_cmd,
             greet])
@@ -548,6 +535,10 @@ pub fn run() {
 
             let config_path = _app.path().config_dir().unwrap().join("settings.json");
             let settings = load_settings(&config_path).unwrap_or_default();
+            let db_path = _app.path().app_local_data_dir().unwrap().join("clips.db");
+            tauri::async_runtime::block_on(init_db(&db_path))?;
+            tauri::async_runtime::block_on(cleanup_orphan_clips(&db_path))?;
+            let db_state = DbPath(db_path.clone());
             let mut ffmpeg_path = PathBuf::new();
             ffmpeg_path.push("ffmpeg");
             let mut ffmpeg_proc = FfmpegProcess::new(ffmpeg_path);
@@ -579,6 +570,7 @@ pub fn run() {
             _app.manage(FfmpegState(ffmpeg_process.clone()));
             _app.manage(settings_state);
             _app.manage(settings_path_state);
+            _app.manage(db_state.clone());
 
             let dir = settings.save_dir.clone();
             let obs_ws_client_clone2 = obs_ws_client.clone();
@@ -588,6 +580,7 @@ pub fn run() {
 
             let obs_ws_client_clone = obs_ws_client.clone();
             let ffmpeg_process_clone = ffmpeg_process.clone();
+            let db_path_clone = db_state.clone();
 
             tauri::async_runtime::spawn(async move {
                 poll_lol_events(move |all_data: &AllGameData, new_events: Vec<LolEvent>| {
@@ -633,7 +626,7 @@ pub fn run() {
                                                             .into_iter()
                                                             .filter(|ev| ev.EventTime >= clip_start)
                                                             .collect();
-                                                        if let Err(e) = write_clip_metadata(&path, &relevant_events, clip_start).await {
+                                                        if let Err(e) = write_clip_metadata(&db_path_clone.0, &path, &relevant_events, clip_start).await {
                                                             eprintln!("Failed to write metadata: {}", e);
                                                         }
                                                     }
