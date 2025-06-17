@@ -22,67 +22,73 @@
     <main class="container mx-auto p-4 app-container">
       <h1 class="mb-4 text-center">LoL イベントトリガー録画アプリ</h1>
 
-      <div class="status-panel mb-3">
-        <div><strong>ゲーム状態:</strong> <span id="gameState"></span></div>
-        <div><strong>OBS状態:</strong> <span id="obsState"></span></div>
-        <div class="form-check form-switch mode-toggle" style="display:none;">
-          <input class="form-check-input" type="checkbox" id="modeToggle" />
-          <label class="form-check-label" for="modeToggle">シェル録画を使用</label>
-        </div>
-      </div>
-
-      <div class="button-group mb-4">
-        <h2 class="h5 mb-3">🎥 録画操作</h2>
-        <button class="px-4 py-2 mr-2 border border-blue-600 text-blue-600 rounded" id="btnStart">録画開始</button>
-        <button class="px-4 py-2 border border-gray-600 text-gray-600 rounded" id="btnStop">録画停止</button>
-      </div>
-
-      <div class="button-group mb-4">
-        <h2 class="h5 mb-3">🔁 リプレイバッファ</h2>
-        <div class="flex flex-wrap items-end gap-2 mb-2">
-          <div>
-            <label class="block text-sm" for="segmentSeconds">秒数</label>
-            <input class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="segmentSeconds" type="number" min="1" value="6" />
-          </div>
-          <div>
-            <label class="block text-sm" for="fpsInput">FPS</label>
-            <input class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="fpsInput" type="number" min="1" value="30" />
-          </div>
-          <div>
-            <label class="block text-sm" for="videoSourceInput">映像ソース</label>
-            <select class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="videoSourceInput"></select>
-          </div>
-          <div>
-            <label class="block text-sm" for="audioSourceInput">音声ソース</label>
-            <select class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="audioSourceInput"></select>
-          </div>
-          <div>
-            <label class="block text-sm" for="wrapCountInput">ラップ数</label>
-            <input class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="wrapCountInput" type="number" min="1" value="11" />
-          </div>
-          <div>
-            <label class="block text-sm" for="bitrateInput">ビットレート</label>
-            <input class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="bitrateInput" type="text" value="20M" />
+      <div class="flex flex-col md:flex-row w-full gap-6">
+        <div class="md:w-1/2 order-2 md:order-1">
+          <div class="log-container">
+            <h2 class="h5 mb-3">📜 ゲームイベントログ</h2>
+            <ul id="eventLog" class="list-unstyled"></ul>
           </div>
         </div>
-        <button class="px-4 py-2 mr-2 border border-green-600 text-green-600 rounded" id="btnReplayStart">開始</button>
-        <button class="px-4 py-2 mr-2 border border-yellow-500 text-yellow-500 rounded" id="btnReplayStop">停止</button>
-        <button class="px-4 py-2 border border-teal-500 text-teal-500 rounded" id="btnReplaySave">保存</button>
-      </div>
 
-      <div class="button-group mb-4">
-        <h2 class="h5 mb-3">🛠 ユーティリティ</h2>
-        <div class="flex mb-2 space-x-2">
-          <input class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1 flex-grow" id="saveDirInput" type="text" />
-          <button class="px-2 py-1 border border-gray-500 text-gray-700 rounded" id="chooseDirBtn">選択</button>
+        <div class="md:w-1/2 order-1 md:order-2">
+          <div class="status-panel mb-3">
+            <div><strong>ゲーム状態:</strong> <span id="gameState"></span></div>
+            <div><strong>OBS状態:</strong> <span id="obsState"></span></div>
+            <div class="form-check form-switch mode-toggle" style="display:none;">
+              <input class="form-check-input" type="checkbox" id="modeToggle" />
+              <label class="form-check-label" for="modeToggle">シェル録画を使用</label>
+            </div>
+          </div>
+
+          <div class="button-group mb-4">
+            <h2 class="h5 mb-3">🎥 録画操作</h2>
+            <button class="px-4 py-2 mr-2 border border-blue-600 text-blue-600 rounded" id="btnStart">録画開始</button>
+            <button class="px-4 py-2 border border-gray-600 text-gray-600 rounded" id="btnStop">録画停止</button>
+          </div>
+
+          <div class="button-group mb-4">
+            <h2 class="h5 mb-3">🔁 リプレイバッファ</h2>
+            <div class="flex flex-wrap items-end gap-2 mb-2">
+              <div>
+                <label class="block text-sm" for="segmentSeconds">秒数</label>
+                <input class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="segmentSeconds" type="number" min="1" value="6" />
+              </div>
+              <div>
+                <label class="block text-sm" for="fpsInput">FPS</label>
+                <input class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="fpsInput" type="number" min="1" value="30" />
+              </div>
+              <div>
+                <label class="block text-sm" for="videoSourceInput">映像ソース</label>
+                <select class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="videoSourceInput"></select>
+              </div>
+              <div>
+                <label class="block text-sm" for="audioSourceInput">音声ソース</label>
+                <select class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="audioSourceInput"></select>
+              </div>
+              <div>
+                <label class="block text-sm" for="wrapCountInput">ラップ数</label>
+                <input class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="wrapCountInput" type="number" min="1" value="11" />
+              </div>
+              <div>
+                <label class="block text-sm" for="bitrateInput">ビットレート</label>
+                <input class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1" id="bitrateInput" type="text" value="20M" />
+              </div>
+            </div>
+            <button class="px-4 py-2 mr-2 border border-green-600 text-green-600 rounded" id="btnReplayStart">開始</button>
+            <button class="px-4 py-2 mr-2 border border-yellow-500 text-yellow-500 rounded" id="btnReplayStop">停止</button>
+            <button class="px-4 py-2 border border-teal-500 text-teal-500 rounded" id="btnReplaySave">保存</button>
+          </div>
+
+          <div class="button-group mb-4">
+            <h2 class="h5 mb-3">🛠 ユーティリティ</h2>
+            <div class="flex mb-2 space-x-2">
+              <input class="border border-gray-600 bg-gray-800 text-gray-100 rounded p-1 flex-grow" id="saveDirInput" type="text" />
+              <button class="px-2 py-1 border border-gray-500 text-gray-700 rounded" id="chooseDirBtn">選択</button>
+            </div>
+            <button class="px-2 py-1 border border-blue-600 text-blue-600 rounded" id="btnGetDir">保存先を開く</button>
+            <button class="px-2 py-1 ml-2 border border-green-600 text-green-600 rounded" id="btnSaveSettings">設定保存</button>
+          </div>
         </div>
-        <button class="px-2 py-1 border border-blue-600 text-blue-600 rounded" id="btnGetDir">保存先を開く</button>
-        <button class="px-2 py-1 ml-2 border border-green-600 text-green-600 rounded" id="btnSaveSettings">設定保存</button>
-      </div>
-
-      <div class="log-container">
-        <h2 class="h5 mb-3">📜 ゲームイベントログ</h2>
-        <ul id="eventLog" class="list-unstyled"></ul>
       </div>
     </main>
 
