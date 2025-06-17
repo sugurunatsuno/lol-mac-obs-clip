@@ -1,120 +1,103 @@
-# LoL OBS Clip Tool
+# LoL OBS クリップツール
 
-This project provides a minimal Tauri application for capturing League of Legends highlights through OBS.
-The frontend uses [Tailwind CSS](https://tailwindcss.com/) loaded via CDN for styling.
+このプロジェクトは、OBS を通じて League of Legends のハイライトをキャプチャするための最小限の Tauri アプリケーションです。フロントエンドには [Tailwind CSS](https://tailwindcss.com/) を CDN 経由で読み込んで使用しています。
 
-## Prerequisites
+## 必要条件
 
-- **Rust**: install the latest stable toolchain via [rustup](https://rust-lang.org/tools/install).
-- **pnpm**: used for managing JavaScript dependencies.
-- **OBS Studio** with the **WebSocket** plugin enabled (v5 or later recommended).
-- No manual **ffmpeg** installation is required. The app downloads a suitable
-  binary to its local data directory on first run.
-- A running **League of Legends** client when using the tool.
+- **Rust**: 最新の安定版ツールチェーンを [rustup](https://rust-lang.org/tools/install) からインストールしてください。
+- **pnpm**: JavaScript の依存関係管理に使用します。
+- **OBS Studio** と **WebSocket** プラグイン（バージョン 5 以降推奨）。
+- **ffmpeg**: `PATH` に通ったコマンドを利用します。事前にインストールしてください。
+- ツール利用時は **League of Legends** クライアントを起動しておいてください。
 
-## Build and Run
+## ビルドと実行
 
-Install JavaScript dependencies and run the app in development mode:
+JavaScript の依存関係をインストールし、開発モードでアプリを起動します:
 
 ```bash
 pnpm install
 pnpm tauri dev
 ```
 
-For a release build:
+リリースビルドを作成する場合:
 
 ```bash
 pnpm tauri build
 ```
 
-The commands above require that the Rust toolchain is installed since Tauri compiles a Rust backend.
+上記コマンドを実行するには Rust ツールチェーンが必要です。Tauri はバックエンドに Rust をコンパイルします。
 
-## OBS Configuration
+## OBS の設定
 
-1. Install the OBS WebSocket plugin and restart OBS.
-2. Open *Tools → WebSocket Server Settings* and enable the server (default port `4455`).
-3. Configure your recording or replay buffer path in OBS or set it from the application's settings.
-4. Use the same port and password (if set) in this application's settings so it can control OBS.
+1. OBS WebSocket プラグインをインストールして OBS を再起動します。
+2. *Tools → WebSocket Server Settings* を開き、サーバーを有効にします（デフォルトポートは `4455`）。
+3. OBS で録画またはリプレイバッファの保存先を設定するか、アプリの設定画面から指定します。
+4. アプリの設定でも同じポートとパスワード（設定している場合）を指定して OBS を操作できるようにします。
 
-## League of Legends Setup
+## League of Legends の準備
 
-Start the LoL client before launching the app. The client exposes an API that this tool queries; no additional configuration is normally required.
+アプリを起動する前に LoL クライアントを起動してください。クライアントが公開している API をこのツールが利用するため、通常それ以外の設定は不要です。
 
-## Usage
+## 使い方
 
-1. Launch OBS and ensure the WebSocket server is running.
-2. Start the League of Legends client and this application.
-3. When a highlight occurs, press the **Clip** button (or configured hotkey) to save the OBS replay buffer.
-4. Saved videos can be opened from within the app for playback.
-5. Each clip is accompanied by a `replay_<timestamp>.json` file listing all LoL events
-   from the clip duration along with their offsets from the start of the video.
-6. Optionally choose to encode clips with ffmpeg for easier sharing.
-7. Use the **設定保存** button to persist your current options. They are loaded automatically on startup. You can also set the folder where recordings and clips are saved from the settings screen. The same path is used for OBS recordings and ffmpeg clips.
+1. OBS を起動し、WebSocket サーバーが実行されていることを確認します。
+2. League of Legends クライアントと本アプリを起動します。
+3. 設定画面の「シェル録画を使用」スイッチで、OBS 録画と ffmpeg 録画を切り替えられます。
+4. ハイライトが起きたら **Clip** ボタン（または設定したホットキー）を押してリプレイバッファを保存します。
+5. 保存された動画はアプリ内から再生できます。
+6. 各クリップには `replay_<timestamp>.json` が付属し、クリップ時間中の全ての LoL イベントとその動画開始からのオフセットが記録されます。
+7. 必要に応じて ffmpeg でエンコードして共有しやすい形式に変換できます。
+8. **設定保存** ボタンで現在の設定を保存できます。起動時に自動で読み込まれます。録画やクリップの保存先フォルダも設定画面から変更可能で、OBS の録画と ffmpeg クリップのどちらにも同じパスが使用されます。
 
-## `ffmpeg_replaybuffer.sh` (macOS)
+## `ffmpeg_replaybuffer.sh`（macOS）
 
-This repository includes a helper script for capturing a rolling replay buffer
-with ffmpeg. The script only works on **macOS** because it relies on the
-`avfoundation` input device and it creates a RAM disk using `hdiutil`. The RAM
-disk creation requires `sudo` so be prepared to enter your password when you run
-the script.
+このリポジトリには、ffmpeg を用いたロール式リプレイバッファを取得するための補助スクリプトが含まれています。**macOS** 専用で、`avfoundation` 入力デバイスを利用し、`hdiutil` で RAM ディスクを作成します。RAM ディスク作成には `sudo` が必要なため、実行時にパスワード入力を求められます。
 
-Example usage:
+使用例:
 
 ```bash
 sudo ./ffmpeg_replaybuffer.sh -f 30 -b 20M -s "1:none" -t 6 -n 11 -r 512
 ```
 
-Parameters:
+引数:
 
-- `-f FPS` – output frames per second (default `30`).
-- `-b BITRATE` – target video bitrate (default `20M`).
-- `-s SRC` – capture source for avfoundation (default `"1:none"`).
-- `-t SEG_S` – length of each segment in seconds (default `6`).
-- `-n WRAP` – number of segments kept in the buffer (default `11`).
-- `-r RAM_MB` – size of the RAM disk in megabytes (default `512`).
-- `-o OUT_DIR` – directory where saved clips are written (default `~/Movies`).
+- `-f FPS` – 出力フレームレート（デフォルト `30`）。
+- `-b BITRATE` – 目標ビットレート（デフォルト `20M`）。
+- `-s SRC` – avfoundation 用のキャプチャソース（デフォルト `"1:none"`）。
+- `-t SEG_S` – セグメントの長さ（秒、デフォルト `6`）。
+- `-n WRAP` – バッファに保持するセグメント数（デフォルト `11`）。
+- `-r RAM_MB` – RAM ディスクサイズ（MB、デフォルト `512`）。
+- `-o OUT_DIR` – クリップ保存先ディレクトリ（デフォルト `~/Movies`）。
 
-While the script is running it displays `REC ▶︎`. Press **s** at any time to
-save the most recent replay buffer to the specified output directory (default `~/Movies`) as
-`replay_<timestamp>.mp4`. Press **Esc** or **q** to quit.
+スクリプト実行中は `REC ▶︎` と表示されます。任意のタイミングで **s** を押すと、直近のリプレイバッファが指定ディレクトリ（デフォルト `~/Movies`）に `replay_<timestamp>.mp4` として保存されます。**Esc** または **q** で終了します。
 
-Once integrated with the Tauri app, the application will spawn this script
-automatically so you can manage the replay buffer from the GUI. Until then you
-can invoke the script manually from the project directory.
+この機能は現在 Tauri アプリにも組み込まれており、設定で「シェル録画」を選択すると GUI からリプレイバッファを制御できます。スクリプトは単体で利用したい場合にのみ手動で実行してください。
 
-### Replay buffer options
+### リプレイバッファのオプション
 
-When starting the replay buffer from the Tauri application, you can override several
-`ffmpeg_replaybuffer.sh` options:
+Tauri アプリからリプレイバッファを開始する際に、`ffmpeg_replaybuffer.sh` のいくつかのオプションを上書きできます:
 
-- `segment_seconds` (`-t`) – length of each segment in seconds. Defaults to `6`.
-- `fps` (`-f`) – output frames per second. Defaults to `30`.
-- `video_source`/`audio_source` (`-s`) – combined as `<video>:<audio>` for the
-  `avfoundation` input. Defaults to `1:none`.
+- `segment_seconds` (`-t`) – セグメントの長さ（秒）。デフォルトは `6`。
+- `fps` (`-f`) – 出力フレームレート。デフォルトは `30`。
+- `video_source`/`audio_source` (`-s`) – `<video>:<audio>` の形で `avfoundation` 入力に渡します。デフォルトは `1:none`。
 
-These values are passed directly to `ffmpeg_replaybuffer.sh` when it is spawned.
+これらの値はスクリプト起動時にそのまま渡されます。
 
-While the replay buffer is running, creating a `.trigger_save` file inside the
-segment directory will cause the buffer to be saved. Creating a `.trigger_quit`
-file will stop the replay buffer entirely. Both files are removed automatically
-after they are processed.
+リプレイバッファ実行中にセグメントディレクトリ内に `.trigger_save` ファイルを作成するとバッファが保存されます。`.trigger_quit` ファイルを作成するとリプレイバッファが停止します。どちらのファイルも処理後に自動で削除されます。
 
-### ffmpeg download location
+### ffmpeg の利用
 
-The application stores its own ffmpeg binary under the directory returned by
-`app_local_data_dir`. On macOS this is typically
-`~/Library/Application Support/<app>/ffmpeg/ffmpeg`. Replace the binary there to
-update or override the version shipped by default.
+アプリには ffmpeg バイナリは同梱されていません。`PATH` 上にある `ffmpeg` コマンドをそのまま呼び出して処理を行います。
 
-## Screen and Function Mapping
+## 画面と機能の対応
 
-The frontend now has **five** HTML pages: Home, OBS Mode, FFmpeg Mode, Saved Videos, and Video Detail. Each page links to the others via the shared navigation bar.
+フロントエンドは現在 **5** つの HTML ページで構成されます：Home、OBS モード、FFmpeg モード、Saved Videos、Video Detail。各ページは共通のナビゲーションバーで相互に移動できます。
 
 | Screen | File | Transitions | Invoked Commands |
 |-------|------|-------------|------------------|
-| **Home** | `index.html` | Links to **OBS Mode**, **FFmpeg Mode**, **Videos** | – |
-| **OBS Mode** | `obs.html` | Navbar links to all screens | `get_status`, `start_recording`, `stop_recording`, `start_replay_buffer`, `stop_replay_buffer`, `save_replay_buffer`, `load_settings_cmd`, `save_settings_cmd`, `set_saved_directory`, `get_saved_directory` |
-| **FFmpeg Mode** | `ffmpeg.html` | Navbar links to all screens | `get_status`, `start_recording`, `stop_recording`, `start_ffmpeg_replay`, `stop_ffmpeg_replay`, `save_ffmpeg_clip`, `list_ffmpeg_devices`, `load_settings_cmd`, `save_settings_cmd`, `set_saved_directory`, `get_saved_directory` |
-| **Saved Videos** | `videos.html` | Navbar links to all screens. Entries open **Video Detail**. | `list_saved_videos` |
-| **Video Detail** | `video.html` | Navbar links to all screens | – (uses `convertFileSrc` for local playback) |
+| **Home** | `index.html` | **OBS Mode**、**FFmpeg Mode**、**Videos** へのリンク | – |
+| **OBS Mode** | `obs.html` | ナビバーから全画面へ | `get_status`, `start_recording`, `stop_recording`, `start_replay_buffer`, `stop_replay_buffer`, `save_replay_buffer`, `load_settings_cmd`, `save_settings_cmd`, `set_saved_directory`, `get_saved_directory` |
+| **FFmpeg Mode** | `ffmpeg.html` | ナビバーから全画面へ | `get_status`, `start_recording`, `stop_recording`, `start_ffmpeg_replay`, `stop_ffmpeg_replay`, `save_ffmpeg_clip`, `list_ffmpeg_devices`, `load_settings_cmd`, `save_settings_cmd`, `set_saved_directory`, `get_saved_directory` |
+| **Saved Videos** | `videos.html` | ナビバーから全画面へ。項目をクリックすると **Video Detail** を開きます | `list_saved_videos` |
+| **Video Detail** | `video.html` | ナビバーから全画面へ | – (`convertFileSrc` を使用してローカル再生) |
+
