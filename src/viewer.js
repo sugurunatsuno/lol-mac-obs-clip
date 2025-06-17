@@ -43,6 +43,7 @@ function init() {
   const player = videojs('player');
   player.src({ src: convertFileSrc(file), type });
   let markers;
+  let currentIndex = 0;
 
   function addMarkers() {
     if (markers || events.length === 0 || !player.duration()) return;
@@ -57,7 +58,15 @@ function init() {
       m.className = "event-marker";
       m.style.left = `${(e.offset / player.duration()) * 100}%`;
       m.style.backgroundColor = eventColor(e.EventName);
-      m.title = formatEvent(e);
+      m.dataset.bsToggle = "tooltip";
+      m.dataset.bsPlacement = "top";
+      m.dataset.bsHtml = "true";
+      // show event summary and full JSON in tooltip for quick inspection
+      const tooltip = new bootstrap.Tooltip(m, {
+        title: `<div>${formatEvent(e)}</div><pre class="mb-0">${JSON.stringify(e, null, 2)}</pre>`,
+        html: true,
+        sanitize: false,
+      });
       markers.appendChild(m);
     });
   }
@@ -78,15 +87,19 @@ function init() {
   function update() {
     if (events.length === 0) return;
     const t = player.currentTime();
-    let current = null;
-    for (const e of events) {
-      if (e.offset <= t) {
-        current = e;
-      } else {
-        break;
-      }
+
+    while (
+      currentIndex < events.length - 1 &&
+      events[currentIndex + 1].offset <= t
+    ) {
+      currentIndex++;
     }
-    if (current) {
+    while (currentIndex > 0 && events[currentIndex].offset > t) {
+      currentIndex--;
+    }
+
+    const current = events[currentIndex];
+    if (current && t >= current.offset) {
       metadataEl.textContent = `${formatEvent(current)} (@${current.offset.toFixed(
         1
       )}s)`;
