@@ -1,7 +1,7 @@
 # LoL OBS Clip Tool
 
 This project provides a minimal Tauri application for capturing League of Legends highlights through OBS.
-The frontend uses [Bootstrap](https://getbootstrap.com/) loaded via CDN for styling, and the HTML markup is written using Bootstrap components.
+The frontend uses [Tailwind CSS](https://tailwindcss.com/) loaded via CDN for styling.
 
 ## Prerequisites
 

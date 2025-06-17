@@ -1,5 +1,15 @@
 const { invoke } = window.__TAURI__.core;
 
+function getInt(id, min = 1) {
+  const el = document.getElementById(id);
+  if (!el) return NaN;
+  const val = parseInt(el.value, 10);
+  if (Number.isNaN(val) || val < min) {
+    throw new Error(`${id} must be an integer >= ${min}`);
+  }
+  return val;
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById('videoSourceInput')) {
     await loadDevices();
@@ -34,17 +44,19 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById('btnReplayStart')?.addEventListener('click', async () => {
     const isShell = document.getElementById('modeToggle').checked;
     if (isShell) {
-      const segmentSeconds = parseInt(document.getElementById('segmentSeconds').value, 10);
-      const fps = parseInt(document.getElementById('fpsInput').value, 10);
-      const videoSource = document.getElementById('videoSourceInput').value;
-      const audioSource = document.getElementById('audioSourceInput').value;
-      const wrapCount = parseInt(document.getElementById('wrapCountInput').value, 10);
-      const bitrate = document.getElementById('bitrateInput').value;
       try {
+        const segmentSeconds = getInt('segmentSeconds');
+        const fps = getInt('fpsInput');
+        const videoSource = document.getElementById('videoSourceInput').value;
+        const audioSource = document.getElementById('audioSourceInput').value;
+        const wrapCount = getInt('wrapCountInput');
+        const bitrate = document.getElementById('bitrateInput').value;
         await invoke('start_ffmpeg_replay', { segmentSeconds, fps, videoSource, audioSource, wrapCount, bitrate });
         logEvent("🔁 リプレイバッファを開始しました");
       } catch (e) {
+        alert(e.message);
         logEvent(`⚠️ リプレイバッファの開始に失敗しました: ${e}`);
+        return;
       }
     } else {
       try {
@@ -178,16 +190,19 @@ async function loadDevices() {
 async function saveSettings() {
   const base = await invoke('load_settings_cmd');
   const settings = { ...base };
-  const seg = document.getElementById('segmentSeconds');
-  if (seg) settings.segment_seconds = parseInt(seg.value, 10);
-  const fps = document.getElementById('fpsInput');
-  if (fps) settings.fps = parseInt(fps.value, 10);
+  try {
+    settings.segment_seconds = getInt('segmentSeconds');
+    settings.fps = getInt('fpsInput');
+    const wrap = getInt('wrapCountInput');
+    settings.wrap_count = wrap;
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
   const vsrc = document.getElementById('videoSourceInput');
   if (vsrc) settings.video_source = vsrc.value;
   const asrc = document.getElementById('audioSourceInput');
   if (asrc) settings.audio_source = asrc.value;
-  const wrap = document.getElementById('wrapCountInput');
-  if (wrap) settings.wrap_count = parseInt(wrap.value, 10);
   const br = document.getElementById('bitrateInput');
   if (br) settings.bitrate = br.value;
   const toggle = document.getElementById('modeToggle');

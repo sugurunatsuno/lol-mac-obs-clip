@@ -58,15 +58,7 @@ function init() {
       m.className = "event-marker";
       m.style.left = `${(e.offset / player.duration()) * 100}%`;
       m.style.backgroundColor = eventColor(e.EventName);
-      m.dataset.bsToggle = "tooltip";
-      m.dataset.bsPlacement = "top";
-      m.dataset.bsHtml = "true";
-      // show event summary and full JSON in tooltip for quick inspection
-      const tooltip = new bootstrap.Tooltip(m, {
-        title: `<div>${formatEvent(e)}</div><pre class="mb-0">${JSON.stringify(e, null, 2)}</pre>`,
-        html: true,
-        sanitize: false,
-      });
+      m.title = `${formatEvent(e)}\n${JSON.stringify(e, null, 2)}`;
       markers.appendChild(m);
     });
   }

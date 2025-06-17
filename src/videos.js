@@ -6,17 +6,21 @@ async function loadVideos() {
   tbody.innerHTML = '';
   list.forEach((info) => {
     const tr = document.createElement('tr');
+    tr.className = 'border-b border-gray-200';
 
     const nameTd = document.createElement('td');
+    nameTd.className = 'p-2';
     const link = document.createElement('a');
     link.href = `video.html?file=${encodeURIComponent(info.path)}`;
     link.textContent = info.name;
     nameTd.appendChild(link);
 
     const dateTd = document.createElement('td');
+    dateTd.className = 'p-2';
     dateTd.textContent = info.modified;
 
     const sizeTd = document.createElement('td');
+    sizeTd.className = 'p-2';
     sizeTd.textContent = `${(info.size / (1024 * 1024)).toFixed(1)} MB`;
 
     tr.appendChild(nameTd);

@@ -3,32 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" href="vendor/bootstrap/bootstrap.min.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Saved Videos - LoL Clip Tool</title>
-    <script defer src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
     <script type="module" src="/videos.js" defer></script>
   </head>
   <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-      <div class="container-fluid">
-        <a class="navbar-brand" href="index.html">Clip Tool</a>
-        <div class="navbar-nav">
-          <a class="nav-link" href="index.html">Home</a>
-          <a class="nav-link" href="obs.html">OBS Mode</a>
-          <a class="nav-link" href="ffmpeg.html">FFmpeg Mode</a>
-          <a class="nav-link" href="videos.html">Videos</a>
-        </div>
+    <nav class="bg-gray-800 text-gray-100 py-2">
+      <div class="container mx-auto flex items-center gap-4">
+        <a class="font-bold text-white" href="index.html">Clip Tool</a>
+        <a class="hover:text-blue-400" href="index.html">Home</a>
+        <a class="hover:text-blue-400" href="obs.html">OBS Mode</a>
+        <a class="hover:text-blue-400" href="ffmpeg.html">FFmpeg Mode</a>
+        <a class="hover:text-blue-400" href="videos.html">Videos</a>
       </div>
     </nav>
     <main class="container py-4 app-container">
       <h1 class="mb-4 text-center">Saved Videos</h1>
-      <table class="table">
+      <table class="table-auto w-full border border-gray-300">
         <thead>
-          <tr>
-            <th>Name</th>
-            <th>Date</th>
-            <th>Size</th>
+          <tr class="text-left border-b border-gray-300">
+            <th class="p-2">Name</th>
+            <th class="p-2">Date</th>
+            <th class="p-2">Size</th>
           </tr>
         </thead>
         <tbody id="videoTableBody"></tbody>
