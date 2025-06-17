@@ -8,7 +8,7 @@
   font-weight: 400;
 
   color: #1f2937; /* gray-800 */
-  background-color: #f9fafb; /* gray-50 */
+  background-color: #5c5c5c; /* gray-50 */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -90,7 +90,7 @@ h1 {
   border: 1px solid #d1d5db; /* gray-300 */
   padding: 1rem;
   border-radius: 8px;
-  background-color: #fff;
+  /* background-color: #fff; */
 }
 
 .log-container ul {
