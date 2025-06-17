@@ -7,19 +7,12 @@ settings:
 importers:
 
   .:
-    dependencies:
-      bootstrap:
-        specifier: 5.3.2
-        version: 5.3.2(@popperjs/core@2.11.8)
     devDependencies:
       '@tauri-apps/cli':
         specifier: ^2
         version: 2.5.0
 
 packages:
-
-  '@popperjs/core@2.11.8':
-    resolution: {integrity: sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==}
 
   '@tauri-apps/cli-darwin-arm64@2.5.0':
     resolution: {integrity: sha512-VuVAeTFq86dfpoBDNYAdtQVLbP0+2EKCHIIhkaxjeoPARR0sLpFHz2zs0PcFU76e+KAaxtEtAJAXGNUc8E1PzQ==}
@@ -92,14 +85,7 @@ packages:
     engines: {node: '>= 10'}
     hasBin: true
 
-  bootstrap@5.3.2:
-    resolution: {integrity: sha512-D32nmNWiQHo94BKHLmOrdjlL05q1c8oxbtBphQFb9Z5to6eGRDCm0QgeaZ4zFBHzfg2++rqa2JkqCcxDy0sH0g==}
-    peerDependencies:
-      '@popperjs/core': ^2.11.8
-
 snapshots:
-
-  '@popperjs/core@2.11.8': {}
 
   '@tauri-apps/cli-darwin-arm64@2.5.0':
     optional: true
@@ -147,7 +133,3 @@ snapshots:
       '@tauri-apps/cli-win32-arm64-msvc': 2.5.0
       '@tauri-apps/cli-win32-ia32-msvc': 2.5.0
       '@tauri-apps/cli-win32-x64-msvc': 2.5.0
-
-  bootstrap@5.3.2(@popperjs/core@2.11.8):
-    dependencies:
-      '@popperjs/core': 2.11.8
