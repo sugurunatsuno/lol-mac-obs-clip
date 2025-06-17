@@ -1,3 +1,5 @@
+#![allow(non_snake_case, non_camel_case_types, dead_code, unused_imports)]
+
 // League of Legends data structures
 use serde::{Deserialize, Serialize};
 

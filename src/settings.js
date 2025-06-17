@@ -1,5 +1,4 @@
 const { invoke } = window.__TAURI__.core;
-const { open } = window.__TAURI__.dialog;
 
 window.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById('videoSourceInput')) {

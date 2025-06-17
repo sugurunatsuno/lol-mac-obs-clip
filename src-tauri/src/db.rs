@@ -45,7 +45,7 @@ pub async fn write_clip_metadata(
     let file = video_path.to_path_buf();
     let events_vec = events.to_vec();
     tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let conn = Connection::open(db).map_err(|e| e.to_string())?;
+        let mut conn = Connection::open(db).map_err(|e| e.to_string())?;
         let size = std::fs::metadata(&file).map_err(|e| e.to_string())?.len() as i64;
         conn.execute(
             "INSERT OR IGNORE INTO clips (path, size) VALUES (?1, ?2)",

@@ -171,7 +171,7 @@ pub async fn set_record_directory(shared: SharedObsWsClient, dir: &str) -> Resul
         });
         client
             .ws
-            .send(Message::Text(req.to_string()))
+            .send(Message::Text(req.to_string().into()))
             .await
             .map_err(|e| e.to_string())?;
         Ok(())

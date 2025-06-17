@@ -5,7 +5,6 @@ use std::time::Duration;
 use std::collections::HashSet;
 use tokio::process::Command;
 use std::process::Stdio;
-use tokio::fs;
 use reqwest::Client;
 use tauri::{async_runtime::spawn, Manager};
 use std::path::PathBuf;
@@ -18,8 +17,8 @@ mod db;
 
 use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState};
 use lol::{AllGameData, LolEvent};
-use obs::{send_obs_command_wrapper, send_obs_request_wrapper, set_record_directory, ObsWsState, SharedObsWsClient};
-use ffmpeg::{FfmpegProcess, FfmpegState, SharedFfmpegProcess, ensure_ffmpeg_path, write_clip_metadata};
+use obs::{send_obs_command_wrapper, set_record_directory, ObsWsState, SharedObsWsClient};
+use ffmpeg::{FfmpegProcess, FfmpegState, SharedFfmpegProcess, write_clip_metadata};
 use db::{DbPath, init_db, get_clip_events, list_clips, cleanup_orphan_clips};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -535,6 +534,7 @@ pub fn run() {
 
             let config_path = _app.path().config_dir().unwrap().join("settings.json");
             let settings = load_settings(&config_path).unwrap_or_default();
+            let settings_for_state = settings.clone();
             let db_path = _app.path().app_local_data_dir().unwrap().join("clips.db");
             tauri::async_runtime::block_on(init_db(&db_path))?;
             tauri::async_runtime::block_on(cleanup_orphan_clips(&db_path))?;
@@ -562,7 +562,7 @@ pub fn run() {
             let ffmpeg_process: SharedFfmpegProcess = Arc::new(AsyncMutex::new(ffmpeg_proc));
             let obs_ws_client: SharedObsWsClient = Arc::new(Mutex::new(None));
             let status_clone = status.clone();
-            let settings_state = SettingsState(Arc::new(Mutex::new(settings)));
+            let settings_state = SettingsState(Arc::new(Mutex::new(settings_for_state)));
             let settings_path_state = SettingsPath(config_path.clone());
 
             _app.manage(AppStatusState(status_clone.clone()));
@@ -616,22 +616,25 @@ pub fn run() {
                                             let ffmpeg_clone = ffmpeg_process_clone.clone();
                                             let event_clone = event.clone();
                                             let events_snapshot = all_data.events.events.clone();
-                                            tauri::async_runtime::spawn(async move {
-                                                let mut proc = ffmpeg_clone.lock().await;
-                                                match proc.save().await {
-                                                    Ok(path) => {
-                                                        let dur = proc.segment_seconds * 10;
-                                                        let clip_start = event_clone.EventTime - dur as f64;
-                                                        let relevant_events: Vec<LolEvent> = events_snapshot
-                                                            .into_iter()
-                                                            .filter(|ev| ev.EventTime >= clip_start)
-                                                            .collect();
-                                                        if let Err(e) = write_clip_metadata(&db_path_clone.0, &path, &relevant_events, clip_start).await {
-                                                            eprintln!("Failed to write metadata: {}", e);
+                                            tauri::async_runtime::spawn({
+                                                let db_path = db_path_clone.0.clone();
+                                                async move {
+                                                    let mut proc = ffmpeg_clone.lock().await;
+                                                    match proc.save().await {
+                                                        Ok(path) => {
+                                                            let dur = proc.segment_seconds * 10;
+                                                            let clip_start = event_clone.EventTime - dur as f64;
+                                                            let relevant_events: Vec<LolEvent> = events_snapshot
+                                                                .into_iter()
+                                                                .filter(|ev| ev.EventTime >= clip_start)
+                                                                .collect();
+                                                            if let Err(e) = write_clip_metadata(&db_path, &path, &relevant_events, clip_start).await {
+                                                                eprintln!("Failed to write metadata: {}", e);
+                                                            }
                                                         }
-                                                    }
-                                                    Err(e) => {
-                                                        eprintln!("Failed to save clip: {}", e);
+                                                        Err(e) => {
+                                                            eprintln!("Failed to save clip: {}", e);
+                                                        }
                                                     }
                                                 }
                                             });
