@@ -7,7 +7,6 @@ use std::process::Child as CommandChild;
 use tauri::Manager;
 
 use crate::lol::LolEvent;
-use serde::Serialize;
 use tokio::fs;
 
 fn default_save_dir_path() -> PathBuf {
@@ -268,38 +267,11 @@ pub type SharedFfmpegProcess = Arc<AsyncMutex<FfmpegProcess>>;
 pub struct FfmpegState(pub SharedFfmpegProcess);
 
 pub async fn write_clip_metadata(
+    db_path: &std::path::Path,
     path: &std::path::Path,
     events: &[LolEvent],
     clip_start: f64,
 ) -> Result<(), String> {
-    #[derive(Serialize)]
-    struct EventWithOffset<'a> {
-        #[serde(flatten)]
-        event: &'a LolEvent,
-        offset: f64,
-    }
-
-    #[derive(Serialize)]
-    struct Metadata<'a> {
-        events: Vec<EventWithOffset<'a>>,
-    }
-
-    let events_with_offset = events
-        .iter()
-        .map(|e| EventWithOffset {
-            event: e,
-            offset: e.EventTime - clip_start,
-        })
-        .collect();
-
-    let data = Metadata {
-        events: events_with_offset,
-    };
-
-    let json_path = path.with_extension("json");
-    let contents = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
-    fs::write(json_path, contents)
-        .await
-        .map_err(|e| e.to_string())
+    crate::db::write_clip_metadata(db_path, path, events, clip_start).await
 }
 
