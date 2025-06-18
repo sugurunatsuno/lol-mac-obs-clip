@@ -30,7 +30,7 @@ function formatEvent(e) {
 }
 
 // プレイヤー初期化とイベントメタデータの読み込み
-function init() {
+async function init() {
   const params = new URLSearchParams(window.location.search);
   const file = params.get('file');
   if (!file) return; // パラメータが無ければ何もしない
@@ -56,6 +56,13 @@ function init() {
   });
   let markers;
   let currentIndex = 0;
+  let events = [];
+
+  try {
+    events = await invoke('get_clip_metadata', { path: file });
+  } catch (e) {
+    console.error('Failed to load clip metadata', e);
+  }
 
   function addMarkers() {
     // 再生バー上にイベント位置を表示
@@ -76,8 +83,6 @@ function init() {
     });
   }
 
-
-  let events = [];
 
   // 再生位置に合わせて表示するイベントを更新
   function update() {
