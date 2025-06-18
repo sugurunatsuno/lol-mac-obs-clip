@@ -1,5 +1,7 @@
 // 動画再生ページでクリップのメタデータを表示する処理群
 const { convertFileSrc, invoke } = window.__TAURI__.core;
+const {} = window.__TAURI__.path;
+
 // イベント種類ごとに色を決定するヘルパー
 function eventColor(name) {
   switch (name) {
@@ -71,16 +73,6 @@ function init() {
 
 
   let events = [];
-  invoke('get_clip_metadata', { path: file })
-    .then((data) => {
-      if (Array.isArray(data)) {
-        events = data;
-      }
-      addMarkers();
-    })
-    .catch(() => {
-      /* ignore errors */
-    });
 
   // 再生位置に合わせて表示するイベントを更新
   function update() {

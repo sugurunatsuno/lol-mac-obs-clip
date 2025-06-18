@@ -13,8 +13,8 @@
     <script src="https://vjs.zencdn.net/8.3.0/video.min.js"></script>
     <script type="module" src="/viewer.js" defer></script>
   </head>
-  <body>
-    <nav class="bg-gray-800 text-gray-100 py-2">
+  <body class="h-screen flex flex-col overscroll-none">
+    <nav class="bg-gray-800 text-gray-100 py-2 fixed top-0 left-0 w-full z-10 overscroll-none">
       <div class="container mx-auto flex items-center gap-4">
         <a class="font-bold text-white" href="index.html">Clip Tool</a>
         <a class="hover:text-blue-400" href="index.html">Home</a>
@@ -23,7 +23,7 @@
         <a class="hover:text-blue-400" href="videos.html">Videos</a>
       </div>
     </nav>
-    <main class="container py-4 app-container">
+    <main class="flex-1 overflow-y-auto pt-[48px] container py-4 app-container overscroll-none">
       <h1 id="fileName" class="mb-4 text-center"></h1>
       <video
         id="player"
@@ -31,6 +31,7 @@
         controls
         preload="auto"
         style="max-width: 720px;"
+        data-setup='{"fluid": true, "aspectRatio": "16:9"}'
       ></video>
       <div id="metadata" class="mt-3"></div>
     </main>

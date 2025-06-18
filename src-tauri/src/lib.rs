@@ -237,11 +237,10 @@ struct SavedVideoInfo {
 
 #[tauri::command]
 async fn list_saved_videos(
-    settings: tauri::State<'_, SettingsState>,
-    db: tauri::State<'_, DbPath>,
+    settings: tauri::State<'_, SettingsState>
 ) -> Result<Vec<SavedVideoInfo>, String> {
     // DB 内の孤立したレコードをクリーンアップ
-    cleanup_orphan_clips(&db.0).await?;
+    // cleanup_orphan_clips(&db.0).await?;
 
     // 現在の保存先ディレクトリを取得
     let save_dir = {
@@ -546,6 +545,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             get_status,
             set_recording_mode,

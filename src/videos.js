@@ -12,18 +12,18 @@ async function loadVideos() {
     tr.className = 'border-b border-gray-200';
 
     const nameTd = document.createElement('td');
-    nameTd.className = 'p-2';
+    nameTd.className = 'p-2 text-left';
     const link = document.createElement('a');
     link.href = `video.html?file=${encodeURIComponent(info.path)}`;
     link.textContent = info.name;
     nameTd.appendChild(link);
 
     const dateTd = document.createElement('td');
-    dateTd.className = 'p-2';
+    dateTd.className = 'p-2 text-right';
     dateTd.textContent = info.modified;
 
     const sizeTd = document.createElement('td');
-    sizeTd.className = 'p-2';
+    sizeTd.className = 'p-2 text-right';
     sizeTd.textContent = `${(info.size / (1024 * 1024)).toFixed(1)} MB`;
 
     tr.appendChild(nameTd);
