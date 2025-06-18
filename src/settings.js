@@ -1,5 +1,6 @@
 // Rust 側との通信に使用する invoke を取得
 const { invoke } = window.__TAURI__.core;
+const { open } = window.__TAURI__.dialog;
 
 // input 要素から整数値を取得し、最小値チェックを行うユーティリティ
 function getInt(id, min = 1) {
@@ -103,7 +104,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById('chooseDirBtn')?.addEventListener('click', async () => {
-    const selected = await open({ directory: true });
+    const selected = await open({
+      directory: true,});
     if (selected) {
       document.getElementById('saveDirInput').value = selected;
       await invoke('set_saved_directory', { dir: selected });

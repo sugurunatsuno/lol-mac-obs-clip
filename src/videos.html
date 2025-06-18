@@ -8,8 +8,8 @@
     <title>Saved Videos - LoL Clip Tool</title>
     <script type="module" src="/videos.js" defer></script>
   </head>
-  <body class="h-screen flex flex-col overscroll-none">
-    <nav class="bg-gray-800 text-gray-100 py-2 overscroll-none">
+    <body class="h-screen flex flex-col overscroll-none">
+    <nav class="bg-gray-800 text-gray-100 py-2 fixed top-0 left-0 w-full z-10 overscroll-none">
       <div class="container mx-auto flex items-center gap-4">
         <a class="font-bold text-white" href="index.html">Clip Tool</a>
         <a class="hover:text-blue-400" href="index.html">Home</a>
@@ -19,9 +19,8 @@
       </div>
     </nav>
     <main class="container py-4 app-container overscroll-none flex-1">
-      <h1 class="mb-4 text-center">Saved Videos</h1>
       <div class="overflow-y-auto w-full" style="max-height: 70vh;">
-        <table class="table-auto w-full border border-gray-300">
+        <table class="table-auto w-full border border-gray-300 overscroll-none">
           <thead class="sticky top-0 bg-gray-200 dark:bg-gray-700">
             <tr class="text-left border-b border-gray-300">
               <th class="p-2 text-left">Name</th>

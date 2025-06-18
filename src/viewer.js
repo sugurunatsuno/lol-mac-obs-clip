@@ -46,9 +46,14 @@ function init() {
     type = 'video/quicktime';
   }
 
-  const player = videojs('player');
-  // asset protocol must be enabled to read arbitrary files
-  player.src({ src: convertFileSrc(file, 'asset'), type });
+  const player = videojs('player', {
+    controls: true,
+    autoplay: false,
+    preload: 'auto',
+    fluid: true,
+    techOrder: ['html5'],
+    sources: [{ src: convertFileSrc(file, 'asset'), type: type }],
+  });
   let markers;
   let currentIndex = 0;
 
