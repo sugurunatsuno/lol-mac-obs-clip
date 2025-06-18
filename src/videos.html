@@ -18,18 +18,20 @@
         <a class="hover:text-blue-400" href="videos.html">Videos</a>
       </div>
     </nav>
-    <main class="container py-4 app-container overscroll-none">
+    <main class="container py-4 app-container overscroll-none flex-1">
       <h1 class="mb-4 text-center">Saved Videos</h1>
-      <table class="table-auto w-full border border-gray-300">
-        <thead>
-          <tr class="text-left border-b border-gray-300">
-            <th class="p-2 text-left">Name</th>
-            <th class="p-2 text-right">Date</th>
-            <th class="p-2 text-right">Size</th>
-          </tr>
-        </thead>
-        <tbody id="videoTableBody"></tbody>
-      </table>
+      <div class="overflow-y-auto w-full" style="max-height: 70vh;">
+        <table class="table-auto w-full border border-gray-300">
+          <thead class="sticky top-0 bg-gray-200 dark:bg-gray-700">
+            <tr class="text-left border-b border-gray-300">
+              <th class="p-2 text-left">Name</th>
+              <th class="p-2 text-right">Date</th>
+              <th class="p-2 text-right">Size</th>
+            </tr>
+          </thead>
+          <tbody id="videoTableBody"></tbody>
+        </table>
+      </div>
     </main>
   </body>
 </html>
