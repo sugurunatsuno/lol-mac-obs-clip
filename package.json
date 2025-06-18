@@ -9,5 +9,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@tauri-apps/plugin-dialog": "~2.2.2"
+  }
 }

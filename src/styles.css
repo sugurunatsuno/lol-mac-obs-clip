@@ -23,7 +23,7 @@ body {
 
 .app-container {
   margin: 0 auto;
-  max-width: 720px;
+  max-width: 100%;
   padding-top: 10vh;
   display: flex;
   flex-direction: column;
@@ -42,6 +42,13 @@ body {
   filter: drop-shadow(0 0 2em #24c8db);
 }
 
+html, body {
+  overscroll-behavior: none;
+  /* iOS Safari向け（Webkit独自）*/
+  overscroll-behavior-y: none;
+  /* バウンス完全禁止の保険 */
+  touch-action: pan-x pan-y;
+}
 
 
 a {
