@@ -1,6 +1,7 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+// Windows リリース時に余計なコンソールを表示させないための属性
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    // ライブラリ側のエントリポイントを呼び出すだけ
     lol_clip_tool_lib::run()
 }

@@ -1,5 +1,7 @@
+// Rust 側との通信に使用する invoke を取得
 const { invoke } = window.__TAURI__.core;
 
+// input 要素から整数値を取得し、最小値チェックを行うユーティリティ
 function getInt(id, min = 1) {
   const el = document.getElementById(id);
   if (!el) return NaN;
@@ -7,14 +9,15 @@ function getInt(id, min = 1) {
   if (Number.isNaN(val) || val < min) {
     throw new Error(`${id} must be an integer >= ${min}`);
   }
-  return val;
+  return val; // チェックを通過した値を返す
 }
 
+// DOM が読み込まれたタイミングで初期化処理を実行
 window.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById('videoSourceInput')) {
-    await loadDevices();
+    await loadDevices(); // ffmpeg 用のデバイス一覧を取得
   }
-  await loadSettings();
+  await loadSettings(); // 保存済み設定を画面へ反映
   // 各ボタンにイベントリスナーを設定
   document.getElementById('modeToggle')?.addEventListener('change', async (e) => {
     const mode = e.target.checked ? 'Shell' : 'Obs';
@@ -120,6 +123,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   updateStatus();
 });
 
+// 画面上の状態表示を最新に更新する
 async function updateStatus() {
   const status = await invoke('get_status');
   document.getElementById('gameState').textContent = status.game_state;
@@ -135,6 +139,7 @@ async function updateStatus() {
   }
 }
 
+// 画面のログ欄へテキストを追加
 function logEvent(message) {
   const log = document.getElementById('eventLog');
   const entry = document.createElement('li');
@@ -142,7 +147,9 @@ function logEvent(message) {
   log.prepend(entry);
 }
 
+// 設定ファイルを読み込んでフォームに反映
 async function loadSettings() {
+  // Rust から現在の設定を取得
   const s = await invoke('load_settings_cmd');
   const seg = document.getElementById('segmentSeconds');
   if (seg) seg.value = s.segment_seconds;
@@ -162,6 +169,7 @@ async function loadSettings() {
   if (dir) dir.value = s.save_dir;
 }
 
+// ffmpeg が利用可能なデバイス一覧を取得してセレクトボックスへ展開
 async function loadDevices() {
   const vSel = document.getElementById('videoSourceInput');
   const aSel = document.getElementById('audioSourceInput');
@@ -187,7 +195,9 @@ async function loadDevices() {
   }
 }
 
+// 画面で指定した値を設定ファイルへ保存
 async function saveSettings() {
+  // 既存設定をベースに変更点だけ上書き
   const base = await invoke('load_settings_cmd');
   const settings = { ...base };
   try {

@@ -1,3 +1,6 @@
+// エントリーポイント用のJSファイル
+// 現時点では特別な処理をしていないが、将来的な拡張を見据えて残してある
 window.addEventListener("DOMContentLoaded", () => {
-  // currently no dynamic behavior needed
+  // 動的な処理が必要になった場合はここに追記する
+  // 例: 初期化コードやイベントリスナー登録
 });

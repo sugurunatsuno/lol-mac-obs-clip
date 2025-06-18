@@ -1,3 +1,4 @@
+//! 設定ファイルの読み書きを担当するモジュール
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -5,6 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::RecordingMode;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// アプリの各種設定を保持する構造体
 pub struct AppSettings {
     pub recording_mode: RecordingMode,
     pub segment_seconds: u32,
@@ -32,14 +34,17 @@ impl Default for AppSettings {
     }
 }
 
+/// OS ごとのデフォルト保存先パスを返す
 fn default_save_dir() -> String {
     use std::path::PathBuf;
+    // ユーザーのホーム配下 Movies をデフォルトとする
     let mut dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     dir.push("Movies");
     dir.to_string_lossy().to_string()
 }
 
 pub fn load_settings(path: &Path) -> Option<AppSettings> {
+    // JSON を読み込んで構造体へ変換
     fs::read_to_string(path).ok().and_then(|c| serde_json::from_str(&c).ok())
 }
 
@@ -47,6 +52,7 @@ pub fn save_settings(path: &Path, settings: &AppSettings) -> std::io::Result<()>
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
+    // 整形した JSON で書き出す
     fs::write(path, serde_json::to_string_pretty(settings).unwrap())
 }
 
