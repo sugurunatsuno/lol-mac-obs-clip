@@ -45,7 +45,8 @@ function init() {
   }
 
   const player = videojs('player');
-  player.src({ src: convertFileSrc(file), type });
+  // asset protocol must be enabled to read arbitrary files
+  player.src({ src: convertFileSrc(file, 'asset'), type });
   let markers;
   let currentIndex = 0;
 
