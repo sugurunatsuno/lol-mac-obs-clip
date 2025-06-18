@@ -236,22 +236,45 @@ struct SavedVideoInfo {
 }
 
 #[tauri::command]
-async fn list_saved_videos(db: tauri::State<'_, DbPath>) -> Result<Vec<SavedVideoInfo>, String> {
+async fn list_saved_videos(
+    settings: tauri::State<'_, SettingsState>,
+    db: tauri::State<'_, DbPath>,
+) -> Result<Vec<SavedVideoInfo>, String> {
+    // DB 内の孤立したレコードをクリーンアップ
     cleanup_orphan_clips(&db.0).await?;
-    let clips = list_clips(&db.0).await?;
+
+    // 現在の保存先ディレクトリを取得
+    let save_dir = {
+        let lock = settings.0.lock().unwrap();
+        PathBuf::from(lock.save_dir.clone())
+    };
+
     let mut files = Vec::new();
-    for (path, created, size) in clips {
-        let name = std::path::Path::new(&path)
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-        files.push(SavedVideoInfo {
-            path,
-            name,
-            modified: created,
-            size,
-        });
+    if save_dir.exists() {
+        // ディレクトリ内の mp4 ファイルを走査
+        for entry in std::fs::read_dir(&save_dir).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            if path.extension().map(|ext| ext == "mp4").unwrap_or(false) {
+                let meta = entry.metadata().map_err(|e| e.to_string())?;
+                let modified: chrono::DateTime<chrono::Local> =
+                    meta.modified().map_err(|e| e.to_string())?.into();
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                files.push(SavedVideoInfo {
+                    path: path.to_string_lossy().to_string(),
+                    name,
+                    modified: modified.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    size: meta.len(),
+                });
+            }
+        }
+        // 更新日時で降順ソート
+        files.sort_by(|a, b| b.modified.cmp(&a.modified));
     }
+
     Ok(files)
 }
 
