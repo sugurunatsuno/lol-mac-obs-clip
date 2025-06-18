@@ -101,3 +101,21 @@ Tauri アプリからリプレイバッファを開始する際に、`ffmpeg_rep
 | **Saved Videos** | `videos.html` | ナビバーから全画面へ。項目をクリックすると **Video Detail** を開きます | `list_saved_videos` |
 | **Video Detail** | `video.html` | ナビバーから全画面へ | – (`convertFileSrc` を使用してローカル再生) |
 
+
+## デバッグ実行
+
+VSCode や JetBrains RustRover でデバッグを行う場合、`run-configs` ディレクトリにサンプルの実行設定を用意しています。必要に応じて以下の手順でコピーしてください。
+
+### VSCode
+
+```
+cp run-configs/vscode-launch.json .vscode/launch.json
+```
+
+### RustRover
+
+```
+mkdir -p .idea/runConfigurations
+cp run-configs/rustrover/TauriDev.run.xml .idea/runConfigurations/
+```
+

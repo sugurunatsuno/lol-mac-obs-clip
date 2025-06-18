@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration name="Tauri Dev" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="tauri" />
+    <option name="additionalArguments" value="dev" />
+    <option name="workingDirectory" value="$PROJECT_DIR$" />
+    <envs>
+      <env name="RUST_LOG" value="debug" />
+    </envs>
+  </configuration>
+</component>
