@@ -3,7 +3,7 @@
 // League of Legends data structures
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct AllGameData {
     pub activePlayer: ActivePlayer,
     pub allPlayers: Vec<Player>,
@@ -11,7 +11,7 @@ pub struct AllGameData {
     pub gameData: GameData,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct ActivePlayer {
     pub abilities: Abilities,
     pub championStats: ChampionStats,
@@ -25,7 +25,7 @@ pub struct ActivePlayer {
     pub teamRelativeColors: bool,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Abilities {
     #[serde(rename = "Q")]
     pub q: Option<Ability>,
@@ -39,7 +39,7 @@ pub struct Abilities {
     pub passive: Option<Ability>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Ability {
     #[serde(default)]
     pub abilityLevel: Option<u32>,
@@ -49,7 +49,7 @@ pub struct Ability {
     pub rawDisplayName: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct ChampionStats {
     pub abilityHaste: f64,
     pub abilityPower: f64,
@@ -84,7 +84,7 @@ pub struct ChampionStats {
     pub tenacity: f64,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct FullRunes {
     pub generalRunes: Vec<Rune>,
     pub keystone: Rune,
@@ -93,7 +93,7 @@ pub struct FullRunes {
     pub statRunes: Vec<StatRune>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Rune {
     pub displayName: String,
     pub id: u32,
@@ -101,7 +101,7 @@ pub struct Rune {
     pub rawDisplayName: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct RuneTree {
     pub displayName: String,
     pub id: u32,
@@ -109,13 +109,13 @@ pub struct RuneTree {
     pub rawDisplayName: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct StatRune {
     pub id: u32,
     pub rawDescription: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Player {
     pub championName: String,
     pub isBot: bool,
@@ -138,7 +138,7 @@ pub struct Player {
     pub team: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Item {
     pub canUse: bool,
     pub consumable: bool,
@@ -151,14 +151,14 @@ pub struct Item {
     pub slot: u32,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct PlayerRunes {
     pub keystone: Rune,
     pub primaryRuneTree: RuneTree,
     pub secondaryRuneTree: RuneTree,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Scores {
     pub assists: u32,
     pub creepScore: u32,
@@ -167,20 +167,20 @@ pub struct Scores {
     pub wardScore: f64,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct SummonerSpells {
     pub summonerSpellOne: SummonerSpell,
     pub summonerSpellTwo: SummonerSpell,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct SummonerSpell {
     pub displayName: String,
     pub rawDescription: String,
     pub rawDisplayName: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct EventData {
     #[serde(rename = "Events")]
     pub events: Vec<LolEvent>,
@@ -200,7 +200,7 @@ pub struct LolEvent {
     pub Result: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct GameData {
     pub gameMode: String,
     pub gameTime: f64,

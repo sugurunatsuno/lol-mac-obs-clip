@@ -327,6 +327,10 @@ async fn start_ffmpeg_replay(
     wrap_count: Option<u32>,
     bitrate: Option<String>,
 ) -> Result<(), String> {
+
+    println!("Starting ffmpeg replay buffer with segment_seconds: {:?}, video_source: {:?}, audio_source: {:?}, fps: {:?}, wrap_count: {:?}, bitrate: {:?}", 
+        segment_seconds, video_source, audio_source, fps, wrap_count, bitrate);
+
     let mut proc = state.0.lock().await;
     {
         let mut status = status_state.0.lock().unwrap();
@@ -634,9 +638,13 @@ pub fn run() {
                             }
                             "Multikill" => {
                                 if let Some(killer_name) = &event.KillerName {
-                                    if !killer_name.contains(all_data.activePlayer.summonerName.as_str()) {
-                                        continue;
-                                    }
+                                    // アクティブプレイヤーの名前がキルしたプレイヤー名に含まれているか確認：うまく取れていない
+                                    // if !killer_name.contains(all_data.activePlayer.summonerName.as_str()) {
+                                    //     continue;
+                                    // }
+
+                                    println!("{} multikill by {}: {}, active_player: {}", event.EventTime, killer_name, event.EventName, all_data.activePlayer.summonerName);
+
                                     match mode {
                                         RecordingMode::Obs => {
                                             let obs_client_clone = obs_ws_client_clone.clone();
@@ -675,6 +683,79 @@ pub fn run() {
                                                 }
                                             });
                                         }
+                                    }
+                                }
+                            }
+                            
+                            // ゲームスタート時にOBSかffmpegの録画を開始
+                            "GameStart" => {
+                                println!("Game started at {}", event.EventTime);
+
+                                // ゲーム状態を更新
+                                let mut status = status_clone.lock().unwrap();
+                                status.game_state = GameState::InProgress;
+                                status.obs_state = ObsState::Recording;
+                                status.is_recording = true;
+                                status.replay_buffer_running = false;
+
+                                match mode {
+                                    RecordingMode::Obs => {
+                                        let obs_client_clone = obs_ws_client_clone.clone();
+                                        tauri::async_runtime::spawn(async move {
+                                            if let Err(e) = send_obs_command_wrapper(obs_client_clone, "StartRecord").await {
+                                                eprintln!("Failed to start OBS recording: {}", e);
+                                            } else {
+                                                println!("Started OBS recording");
+                                            }
+                                        });
+                                    }
+                                    RecordingMode::Shell => {
+                                        let ffmpeg_clone = ffmpeg_process_clone.clone();
+                                        tauri::async_runtime::spawn({
+                                            let ffmpeg_process_clone = ffmpeg_process_clone.clone();
+                                            async move {
+                                                if let Err(e) = ffmpeg_clone.lock().await.start(ffmpeg_process_clone).await {
+                                                    eprintln!("Failed to start ffmpeg recording: {}", e);
+                                                } else {
+                                                    println!("Started ffmpeg recording");
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+
+                            // ゲーム終了時にOBSかffmpegの録画を停止
+                            "GameEnd" => {
+                                println!("Game ended at {}", event.EventTime);
+
+                                // ゲーム状態を更新
+                                let mut status = status_clone.lock().unwrap();
+                                status.game_state = GameState::Finished;
+                                status.obs_state = ObsState::NotRecording;
+                                status.is_recording = false;
+                                status.replay_buffer_running = false;
+                                
+                                match mode {
+                                    RecordingMode::Obs => {
+                                        let obs_client_clone = obs_ws_client_clone.clone();
+                                        tauri::async_runtime::spawn(async move {
+                                            if let Err(e) = send_obs_command_wrapper(obs_client_clone, "StopRecord").await {
+                                                eprintln!("Failed to stop OBS recording: {}", e);
+                                            } else {
+                                                println!("Stopped OBS recording");
+                                            }
+                                        });
+                                    }
+                                    RecordingMode::Shell => {
+                                        let ffmpeg_clone = ffmpeg_process_clone.clone();
+                                        tauri::async_runtime::spawn(async move {
+                                            if let Err(e) = ffmpeg_clone.lock().await.stop().await {
+                                                eprintln!("Failed to stop ffmpeg recording: {}", e);
+                                            } else {
+                                                println!("Stopped ffmpeg recording");
+                                            }
+                                        });
                                     }
                                 }
                             }
@@ -721,6 +802,26 @@ where
                                 for event in &new_events {
                                     last_event_ids.insert(event.EventID);
                                 }
+                            }
+
+                            // デバッグ用
+                            if true {
+                                // JSONを整形して出力
+                                let json_output = serde_json::to_string_pretty(&all_data).unwrap_or_else(|_| "{}".to_string());
+                                // 現在の時刻でファイル名を生成、保存
+                                // ディレクトリは~/Documents/LOLReplayに保存
+                                let mut save_dir = dirs::document_dir().unwrap_or_else(|| PathBuf::from("."));
+                                save_dir.push("LOLReplay");
+                                if !save_dir.exists() {
+                                    std::fs::create_dir_all(&save_dir).unwrap_or_else(|_| {
+                                        eprintln!("Failed to create LOLReplay directory: {:?}", save_dir);
+                                    });
+                                }
+                                let file_path = save_dir.join(format!("lol_event_{}.json", chrono::Utc::now().format("%Y%m%d_%H%M%S")));
+                                std::fs::write(&file_path, json_output).unwrap_or_else(|_| {
+                                    eprintln!("Failed to write JSON to file: {:?}", file_path);
+                                });
+                                
                             }
                         }
                         Err(e) => {

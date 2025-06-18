@@ -18,45 +18,6 @@ fn default_save_dir_path() -> PathBuf {
     dir
 }
 
-/// ffmpeg バイナリをダウンロードまたは既存のものを利用
-pub async fn ensure_ffmpeg_path(app: &App) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    // アプリ用データディレクトリ内に ffmpeg フォルダを確保
-    let mut dir = app.path().app_local_data_dir().unwrap();
-    dir.push("ffmpeg");
-    fs::create_dir_all(&dir).await?;
-    let bin_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
-    let bin_path = dir.join(bin_name);
-    if bin_path.exists() {
-        return Ok(bin_path);
-    }
-
-    // OS/アーキテクチャに合わせてダウンロード URL を選択
-    let url = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
-        "https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-mac-arm64"
-    } else if cfg!(target_os = "macos") {
-        "https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-mac-x64"
-    } else if cfg!(target_os = "windows") {
-        "https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-win32-x64.exe"
-    } else {
-        "https://github.com/eugeneware/ffmpeg-static/releases/latest/download/ffmpeg-linux-x64"
-    };
-
-    // ffmpeg バイナリをダウンロードして保存
-    let bytes = reqwest::get(url).await?.bytes().await?;
-    fs::write(&bin_path, &bytes).await?;
-
-#[cfg(unix)]
-{
-    use std::os::unix::fs::PermissionsExt;
-    // 実行権限を付与しておく
-    let mut perm = fs::metadata(&bin_path).await?.permissions();
-    perm.set_mode(0o755);
-    fs::set_permissions(&bin_path, perm).await?;
-}
-
-    Ok(bin_path)
-}
-
 /// ffmpeg コマンド実行の状態を保持
 /// RAM ディスクやバッファ設定もここで管理する
 pub struct FfmpegProcess {
@@ -123,14 +84,18 @@ impl FfmpegProcess {
         self.save_dir = dir;
     }
 
+    /// ffmpeg プロセスを起動し、録画バッファを開始する
     pub async fn start(&mut self, shared: SharedFfmpegProcess) -> Result<(), String> {
         // ffmpeg プロセスを起動し循環バッファを構築
         // 既に動いている場合は何もしない
         if let Some(child) = self.child.as_mut() {
             if child.try_wait().map_err(|e| e.to_string())?.is_none() {
+                println!("ffmpeg process already running");
                 return Ok(());
             }
+            println!("ffmpeg process was stopped, restarting");
         }
+
         if self.child.is_some() {
             self.stop().await?;
         }
@@ -207,11 +172,13 @@ impl FfmpegProcess {
             use tokio::time::{sleep, Duration};
             loop {
                 if fs::metadata(&save_path).await.is_ok() {
+                    println!("Save trigger detected, saving current buffer");
                     let _ = fs::remove_file(&save_path).await;
                     let mut p = shared.lock().await;
                     let _ = p.save().await;
                 }
                 if fs::metadata(&quit_path).await.is_ok() {
+                    println!("Quit trigger detected, stopping ffmpeg process");
                     let _ = fs::remove_file(&quit_path).await;
                     let mut p = shared.lock().await;
                     let _ = p.stop().await;
@@ -292,6 +259,7 @@ pub async fn write_clip_metadata(
     clip_start: f64,
 ) -> Result<(), String> {
     // 保存したクリップに紐づくイベント情報をDBへ書き込む
-    crate::db::write_clip_metadata(db_path, path, events, clip_start).await
+    // crate::db::write_clip_metadata(db_path, path, events, clip_start).await
+    Ok(())
 }
 
