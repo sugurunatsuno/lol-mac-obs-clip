@@ -1,3 +1,4 @@
+//! アプリ全体のコマンドや状態管理を行うメインモジュール
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tokio::sync::Mutex as AsyncMutex;
@@ -9,17 +10,17 @@ use reqwest::Client;
 use tauri::{async_runtime::spawn, Manager};
 use std::path::PathBuf;
 
-mod settings;
-mod lol;
-mod obs;
-mod ffmpeg;
-mod db;
+mod settings; // 設定関連
+mod lol;      // LoL API ラッパー
+mod obs;      // OBS WebSocket クライアント
+mod ffmpeg;   // ffmpeg 管理
+mod db;       // SQLite アクセス
 
 use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState};
 use lol::{AllGameData, LolEvent};
 use obs::{send_obs_command_wrapper, set_record_directory, ObsWsState, SharedObsWsClient};
 use ffmpeg::{FfmpegProcess, FfmpegState, SharedFfmpegProcess, write_clip_metadata};
-use db::{DbPath, init_db, get_clip_events, list_clips, cleanup_orphan_clips};
+use db::{DbPath, init_db, get_clip_events, list_clips, cleanup_orphan_clips}; // DB 操作用
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 enum GameState {
@@ -43,6 +44,7 @@ pub enum RecordingMode {
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// フロントエンドへ返すアプリの状態を保持する構造体
 struct AppStatus {
     game_state: GameState,
     obs_state: ObsState,
@@ -76,6 +78,7 @@ async fn start_recording(
     obs_state: tauri::State<'_, ObsWsState>,
     ffmpeg_state: tauri::State<'_, FfmpegState>,
 ) -> Result<(), String> {
+    // ゲーム開始時に呼び出され、録画処理を開始する
     let mode = {
         let mut lock = state.0.lock().unwrap();
         lock.game_state = GameState::InProgress;
@@ -86,10 +89,11 @@ async fn start_recording(
     };
     match mode {
         RecordingMode::Obs => {
-            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartRecord"));
+            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartRecord")); // OBS 録画開始
             Ok(())
         }
         RecordingMode::Shell => {
+            // ffmpeg を用いた録画を開始
             let shared = ffmpeg_state.0.clone();
             let mut proc = shared.lock().await;
             proc.start(shared.clone()).await
@@ -103,6 +107,7 @@ async fn stop_recording(
     obs_state: tauri::State<'_, ObsWsState>,
     ffmpeg_state: tauri::State<'_, FfmpegState>,
 ) -> Result<(), String> {
+    // 録画を終了し状態をリセット
     let mode = {
         let mut lock = state.0.lock().unwrap();
         lock.game_state = GameState::Finished;
@@ -113,7 +118,7 @@ async fn stop_recording(
     };
     match mode {
         RecordingMode::Obs => {
-            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopRecord"));
+            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopRecord")); // OBS 停止
             Ok(())
         }
         RecordingMode::Shell => {
@@ -129,6 +134,7 @@ async fn start_replay_buffer(
     obs_state: tauri::State<'_, ObsWsState>,
     ffmpeg_state: tauri::State<'_, FfmpegState>,
 ) -> Result<(), String> {
+    // リプレイバッファ機能を開始する
     let mode = {
         let mut lock = state.0.lock().unwrap();
         lock.is_recording = true;
@@ -137,10 +143,11 @@ async fn start_replay_buffer(
     };
     match mode {
         RecordingMode::Obs => {
-            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartReplayBuffer"));
+            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartReplayBuffer")); // OBS 側でリプレイ開始
             Ok(())
         }
         RecordingMode::Shell => {
+            // ffmpeg バッファを起動
             let shared = ffmpeg_state.0.clone();
             let mut proc = shared.lock().await;
             proc.start(shared.clone()).await
@@ -154,6 +161,7 @@ async fn stop_replay_buffer(
     obs_state: tauri::State<'_, ObsWsState>,
     ffmpeg_state: tauri::State<'_, FfmpegState>,
 ) -> Result<(), String> {
+    // リプレイバッファを停止する
     let mode = {
         let mut lock = state.0.lock().unwrap();
         lock.is_recording = false;
@@ -162,7 +170,7 @@ async fn stop_replay_buffer(
     };
     match mode {
         RecordingMode::Obs => {
-            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopReplayBuffer"));
+            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopReplayBuffer")); // OBS リプレイ停止
             Ok(())
         }
         RecordingMode::Shell => {
@@ -181,7 +189,7 @@ async fn save_replay_buffer(
     let mode = { state.0.lock().unwrap().recording_mode.clone() };
     match mode {
         RecordingMode::Obs => {
-            spawn(send_obs_command_wrapper(obs_state.0.clone(), "SaveReplayBuffer"));
+            spawn(send_obs_command_wrapper(obs_state.0.clone(), "SaveReplayBuffer")); // OBS に保存指示
             Ok(())
         }
         RecordingMode::Shell => {
@@ -193,6 +201,7 @@ async fn save_replay_buffer(
 
 #[tauri::command]
 async fn get_saved_directory(state: tauri::State<'_, SettingsState>) -> Result<String, String> {
+    // 現在設定されている保存先パスを返す
     Ok(state.0.lock().unwrap().save_dir.clone())
 }
 
@@ -205,11 +214,13 @@ async fn set_saved_directory(
     ffmpeg_state: tauri::State<'_, FfmpegState>,
 ) -> Result<(), String> {
     {
+        // 設定オブジェクトを更新して保存
         let mut set = settings.0.lock().unwrap();
         set.save_dir = dir.clone();
         save_settings(&path.0, &set).map_err(|e| e.to_string())?;
     }
     {
+        // ffmpeg 側にも保存先を通知
         let mut proc = ffmpeg_state.0.lock().await;
         proc.set_save_dir(PathBuf::from(&dir));
     }
@@ -504,6 +515,7 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
     Ok(DeviceList { video, audio })
 }
 
+/// アプリ状態を共有するためのラッパー
 struct AppStatusState(Arc<Mutex<AppStatus>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -660,6 +672,7 @@ async fn poll_lol_events<F>(mut callback: F)
 where
     F: FnMut(&AllGameData, Vec<LolEvent>) + Send + 'static,
 {
+    // LoL クライアントのイベント API を定期的にポーリング
     let client = Client::builder()
         .danger_accept_invalid_certs(true)
         .timeout(Duration::from_secs(1))

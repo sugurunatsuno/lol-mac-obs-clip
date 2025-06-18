@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
+# ffmpeg を使った簡易リプレイバッファ録画スクリプト
 set -Eeuo pipefail
 
+# ffmpeg コマンドのパス。環境変数で上書き可能
 FFMPEG_BIN=${FFMPEG_BIN:-ffmpeg}
+# デフォルト設定値を各変数に格納
 FPS=30 BITRATE=20M SRC="1:none" SEG_S=6 WRAP=11 RAM_MB=512 OUT_DIR="$HOME/Movies"
 
+# コマンドライン引数の解析
 while getopts "f:b:s:t:n:r:o:h" o; do
   case $o in
     f) FPS=$OPTARG ;; b) BITRATE=$OPTARG ;;
@@ -14,8 +18,10 @@ while getopts "f:b:s:t:n:r:o:h" o; do
   esac
 done
 
+# GOP 長やバッファ長などの内部パラメータを計算
 GOP=$((FPS*SEG_S)) OFFSET=$((-(WRAP-1))) DUR=$((SEG_S*(WRAP-1)))
 BLOCKS=$((RAM_MB*2048))
+# RAM ディスクを作成して一時録画用ディレクトリを用意
 DEV=$(hdiutil attach -nomount "ram://$BLOCKS" | tr -d '[:space:]')
 sudo diskutil erasevolume HFS+ RAMDisk "$DEV" >/dev/null
 DIR=/Volumes/RAMDisk/replay; mkdir -p "$DIR"
@@ -24,6 +30,7 @@ DIR=/Volumes/RAMDisk/replay; mkdir -p "$DIR"
 TRIGGER_SAVE="$DIR/.trigger_save"
 TRIGGER_QUIT="$DIR/.trigger_quit"
 
+# 終了時に RAM ディスクと ffmpeg プロセスを後片付け
 cleanup() {
   [[ -n "${FF_PID:-}" ]] && { kill -TERM "$FF_PID" 2>/dev/null || true; sleep 1; kill -KILL "$FF_PID" 2>/dev/null || true; wait "$FF_PID" 2>/dev/null || true; }
   sudo diskutil eject /Volumes/RAMDisk >/dev/null || true
@@ -33,6 +40,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# ffmpeg をバックグラウンド実行し循環バッファを構築
 "$FFMPEG_BIN" -f avfoundation -pixel_format nv12 -framerate $((FPS*2)) -i "$SRC" \
   -vf "fps=$FPS,format=yuv420p" \
   -c:v h264_videotoolbox -realtime 1 -bf 0 -b:v "$BITRATE" \
@@ -46,6 +54,7 @@ trap cleanup EXIT INT TERM
 echo "REC ▶︎   s=save  Esc/Q=quit（ファイルトリガーも対応中！）"
 stty -icanon -echo
 
+# ユーザー入力やファイルトリガーを監視するループ
 while true; do
   k=""
   if IFS= read -rsn1 k; then
@@ -62,13 +71,15 @@ while true; do
     rm -f "$TRIGGER_QUIT"
   fi
 
+  # 押されたキーに応じて処理を分岐
   case "$k" in
     s)
+      # 現在のバッファ内容を保存
       ts=$(date +%Y%m%d_%H%M%S)
       "$FFMPEG_BIN" -nostdin -y -live_start_index "$OFFSET" -i "$DIR/list.m3u8" \
-             -t "$DUR" -c copy -movflags +faststart "$OUT_DIR/replay_$ts.mp4" 
+             -t "$DUR" -c copy -movflags +faststart "$OUT_DIR/replay_$ts.mp4"
       echo "📼 saved $ts"
       ;;
-    $'\x1b'|q) break ;;
+    $'\x1b'|q) break ;; # Esc または q で終了
   esac
 done

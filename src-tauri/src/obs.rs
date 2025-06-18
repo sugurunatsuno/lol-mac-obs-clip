@@ -1,3 +1,4 @@
+//! OBS WebSocket を使って録画開始/停止などの操作を行うモジュール
 use serde_json::json;
 use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 use tokio::net::TcpStream;
@@ -6,15 +7,16 @@ use std::sync::{Arc, Mutex};
 
 pub type WsType = WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>;
 
+/// OBS の WebSocket クライアント
 pub struct ObsWsClient {
     ws: WsType,
 }
 
 impl ObsWsClient {
-    /// Connect to OBS WebSocket and perform Identify handshake
+    /// OBS WebSocket に接続し Identify ハンドシェイクを行う
     pub async fn connect_and_identify(url: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let (mut ws_stream, _) = connect_async(url).await?;
-        // 1. Hello
+        // 1. Hello を受信
         let msg = ws_stream.next().await;
         if let Some(Ok(Message::Text(text))) = msg {
             let val: serde_json::Value = serde_json::from_str(&text)?;
@@ -24,13 +26,13 @@ impl ObsWsClient {
         } else {
             return Err("Failed to receive Hello".into());
         }
-        // 2. Identify
+        // 2. Identify を送信
         let identify = json!({
             "op": 1,
             "d": { "rpcVersion": 1, "authentication": null }
         });
         ws_stream.send(Message::Text(identify.to_string().into())).await?;
-        // 3. Identified
+        // 3. Identified を待つ
         let msg = ws_stream.next().await;
         if let Some(Ok(Message::Text(text))) = msg {
             let val: serde_json::Value = serde_json::from_str(&text)?;
@@ -43,8 +45,9 @@ impl ObsWsClient {
         Ok(ObsWsClient { ws: ws_stream })
     }
 
-    /// Send a command without waiting for response
+    /// 応答を待たずにコマンドを送信
     pub async fn send_command(&mut self, command: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // OBS へコマンドを投げるだけの簡易送信
         let req = json!({
             "op": 6,
             "d": {
@@ -56,7 +59,7 @@ impl ObsWsClient {
         Ok(())
     }
 
-    /// Send a command and wait for response
+    /// コマンド送信後、レスポンスを待って値を返す
     pub async fn send_request(&mut self, command: &str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let req = json!({
             "op": 6,
@@ -86,6 +89,7 @@ pub async fn send_obs_command_wrapper(shared: SharedObsWsClient, command: &str) 
         needs_connect = client_guard.is_none();
     }
     if needs_connect {
+        // 未接続なら接続と認証を行う
         let client = ObsWsClient::connect_and_identify("ws://127.0.0.1:4455")
             .await
             .map_err(|e| e.to_string())?;
@@ -140,6 +144,7 @@ pub async fn send_obs_request_wrapper(shared: SharedObsWsClient, command: &str) 
     result
 }
 
+/// OBS 側の録画保存先ディレクトリを変更する
 pub async fn set_record_directory(shared: SharedObsWsClient, dir: &str) -> Result<(), String> {
     let mut needs_connect = false;
     {

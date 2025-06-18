@@ -1,4 +1,6 @@
+// 動画再生ページでクリップのメタデータを表示する処理群
 const { convertFileSrc, invoke } = window.__TAURI__.core;
+// イベント種類ごとに色を決定するヘルパー
 function eventColor(name) {
   switch (name) {
     case "ChampionKill":
@@ -13,6 +15,7 @@ function eventColor(name) {
 }
 
 
+// イベント内容を分かりやすいテキストに変換
 function formatEvent(e) {
   switch (e.EventName) {
     case 'ChampionKill':
@@ -24,10 +27,11 @@ function formatEvent(e) {
   }
 }
 
+// プレイヤー初期化とイベントメタデータの読み込み
 function init() {
   const params = new URLSearchParams(window.location.search);
   const file = params.get('file');
-  if (!file) return;
+  if (!file) return; // パラメータが無ければ何もしない
 
   document.getElementById('fileName').textContent = file.split('/').pop();
   const metadataEl = document.getElementById('metadata');
@@ -46,6 +50,7 @@ function init() {
   let currentIndex = 0;
 
   function addMarkers() {
+    // 再生バー上にイベント位置を表示
     if (markers || events.length === 0 || !player.duration()) return;
     const holder = player.el().querySelector(".vjs-progress-holder");
     if (!holder) return;
@@ -76,6 +81,7 @@ function init() {
       /* ignore errors */
     });
 
+  // 再生位置に合わせて表示するイベントを更新
   function update() {
     if (events.length === 0) return;
     const t = player.currentTime();
@@ -98,9 +104,10 @@ function init() {
     }
   }
 
-  player.on('loadedmetadata', addMarkers);
-  player.on('timeupdate', update);
-  player.on('seeked', update);
+  player.on('loadedmetadata', addMarkers); // 再生準備完了時にマーカー追加
+  player.on('timeupdate', update); // 再生位置が変わるたびに呼び出し
+  player.on('seeked', update); // シーク時にもイベント更新
 }
 
+// DOM 解析後に初期化処理を実行
 window.addEventListener('DOMContentLoaded', init);

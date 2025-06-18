@@ -1,6 +1,9 @@
+// 保存済み動画一覧を取得しテーブル表示するスクリプト
 const { invoke } = window.__TAURI__.core;
 
+// テーブルへ動画情報を動的に展開
 async function loadVideos() {
+  // Rust 側から動画一覧を取得
   const list = await invoke('list_saved_videos');
   const tbody = document.getElementById('videoTableBody');
   tbody.innerHTML = '';
@@ -31,4 +34,5 @@ async function loadVideos() {
   });
 }
 
+// ページ表示後に動画一覧を読み込む
 window.addEventListener('DOMContentLoaded', loadVideos);
