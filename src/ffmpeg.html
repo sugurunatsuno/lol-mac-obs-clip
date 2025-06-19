@@ -94,6 +94,16 @@
       </div>
     </main>
 
-    <script>window.addEventListener("DOMContentLoaded",()=>{const t=document.getElementById("modeToggle");if(t){t.checked=true;t.disabled=true;}});</script>
+    <script>
+      window.addEventListener("DOMContentLoaded", () => {
+        const t = document.getElementById("modeToggle");
+        if (t) {
+          t.checked = true;
+          t.disabled = true;
+        }
+        // ページ遷移時にアプリの録画モードも ffmpeg に更新する
+        window.__TAURI__.core.invoke("set_recording_mode", { mode: "Shell" });
+      });
+    </script>
   </body>
 </html>
