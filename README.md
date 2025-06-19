@@ -109,13 +109,12 @@ Tauri アプリからリプレイバッファを開始する際に、`ffmpeg_rep
 
 ## 画面と機能の対応
 
-フロントエンドは現在 **5** つの HTML ページで構成されます：Home、OBS モード、FFmpeg モード、Saved Videos、Video Detail。各ページは共通のナビゲーションバーで相互に移動できます。
+フロントエンドは現在 **4** つの HTML ページで構成されます：Home、OBS モード、Saved Videos、Video Detail。各ページは共通のナビゲーションバーで相互に移動できます。
 
 | Screen | File | Transitions | Invoked Commands |
 |-------|------|-------------|------------------|
-| **Home** | `index.html` | **OBS Mode**、**FFmpeg Mode**、**Videos** へのリンク | – |
+| **Home** | `index.html` | **OBS Mode**、**Videos** へのリンク | – |
 | **OBS Mode** | `obs.html` | ナビバーから全画面へ | `get_status`, `start_recording`, `stop_recording`, `start_replay_buffer`, `stop_replay_buffer`, `save_replay_buffer`, `load_settings_cmd`, `save_settings_cmd`, `set_saved_directory`, `get_saved_directory` |
-| **FFmpeg Mode** | `ffmpeg.html` | ナビバーから全画面へ | `get_status`, `start_recording`, `stop_recording`, `start_ffmpeg_replay`, `stop_ffmpeg_replay`, `save_ffmpeg_clip`, `list_ffmpeg_devices`, `load_settings_cmd`, `save_settings_cmd`, `set_saved_directory`, `get_saved_directory` |
 | **Saved Videos** | `videos.html` | ナビバーから全画面へ。項目をクリックすると **Video Detail** を開きます | `list_saved_videos` |
 | **Video Detail** | `video.html` | ナビバーから全画面へ | – (`convertFileSrc` を使用してローカル再生) |
 
