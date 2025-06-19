@@ -283,13 +283,3 @@ pub type SharedFfmpegProcess = Arc<AsyncMutex<FfmpegProcess>>;
 pub struct FfmpegState(pub SharedFfmpegProcess);
 // アプリ全体で共有するためのラッパー型
 
-pub async fn write_clip_metadata(
-    db_path: &std::path::Path,
-    path: &std::path::Path,
-    events: &[LolEvent],
-    clip_start: f64,
-) -> Result<(), String> {
-    // 保存したクリップに紐づくイベント情報をDBへ書き込む
-    // crate::db::write_clip_metadata(db_path, path, events, clip_start).await
-    Ok(())
-}

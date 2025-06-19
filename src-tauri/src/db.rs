@@ -1,4 +1,5 @@
 use crate::lol::LolEvent;
+use crate::timesync::{TimeSnapshot, TimedEvent};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -25,23 +26,24 @@ pub async fn init_db(path: &Path) -> Result<(), String> {
 pub async fn write_clip_metadata(
     _db_path: &Path,
     video_path: &Path,
-    events: &[LolEvent],
+    time_map: &[TimeSnapshot],
+    events: &[TimedEvent],
     clip_start: f64,
 ) -> Result<(), String> {
-    // 出力ファイル名を json に変換
     let out_path = video_path.with_extension("json");
     let events_with_offset: Vec<EventWithOffset> = events
         .iter()
-        .cloned()
         .map(|ev| EventWithOffset {
-            // 各イベントにオフセットを付与
-            event: ev.clone(),
-            offset: ev.EventTime - clip_start,
+            event: ev.event.clone(),
+            real_time: ev.real_time,
+            offset: ev.real_time - clip_start,
         })
         .collect();
-    // JSON 文字列へ変換
-    let json = serde_json::to_string_pretty(&events_with_offset).map_err(|e| e.to_string())?;
-    // ファイルへ書き出し
+    let meta = ClipMetadata {
+        events: events_with_offset,
+        time_map: time_map.to_vec(),
+    };
+    let json = serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?;
     fs::write(out_path, json).await.map_err(|e| e.to_string())
 }
 
@@ -49,18 +51,25 @@ pub async fn write_clip_metadata(
 pub struct EventWithOffset {
     #[serde(flatten)]
     pub event: LolEvent,
+    /// Absolute real time (seconds since Unix epoch)
+    pub real_time: f64,
     pub offset: f64,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct ClipMetadata {
+    pub events: Vec<EventWithOffset>,
+    pub time_map: Vec<TimeSnapshot>,
+}
+
 // クリップ内でのイベント発生位置を保持
 
 /// Read clip metadata from the JSON file written by `write_clip_metadata`.
-pub async fn get_clip_events(_db_path: &Path, path: &Path) -> Result<Vec<EventWithOffset>, String> {
-    // JSON ファイルを開き内容を文字列で取得
+pub async fn read_clip_metadata(_db_path: &Path, path: &Path) -> Result<ClipMetadata, String> {
     let json_path = path.with_extension("json");
     let contents = fs::read_to_string(json_path)
         .await
         .map_err(|e| e.to_string())?;
-    // JSON を構造体へ変換
     serde_json::from_str(&contents).map_err(|e| e.to_string())
 }
 

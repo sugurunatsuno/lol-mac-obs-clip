@@ -16,12 +16,14 @@ mod ffmpeg; // ffmpeg 管理
 mod lol; // LoL API ラッパー
 mod obs; // OBS WebSocket クライアント
 mod settings; // 設定関連 // SQLite アクセス
+mod timesync;
 
-use db::{cleanup_orphan_clips, get_clip_events, init_db, list_clips, DbPath};
-use ffmpeg::{write_clip_metadata, FfmpegProcess, FfmpegState, SharedFfmpegProcess};
+use db::{cleanup_orphan_clips, read_clip_metadata, write_clip_metadata, init_db, list_clips, DbPath};
+use ffmpeg::{FfmpegProcess, FfmpegState, SharedFfmpegProcess};
 use lol::{AllGameData, LolEvent};
 use obs::{send_obs_command_wrapper, set_record_directory, ObsWsState, SharedObsWsClient};
-use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState}; // DB 操作用
+use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState};
+use timesync::{TimeSyncState, TimeSnapshot, TimedEvent, TimeSyncData};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 enum GameState {
@@ -294,8 +296,8 @@ async fn list_saved_videos(
 async fn get_clip_metadata(
     path: String,
     db: tauri::State<'_, DbPath>,
-) -> Result<Vec<db::EventWithOffset>, String> {
-    get_clip_events(&db.0, std::path::Path::new(&path)).await
+) -> Result<db::ClipMetadata, String> {
+    read_clip_metadata(&db.0, std::path::Path::new(&path)).await
 }
 
 #[tauri::command]
@@ -389,9 +391,37 @@ async fn stop_ffmpeg_replay(
 }
 
 #[tauri::command]
-async fn save_ffmpeg_clip(state: tauri::State<'_, FfmpegState>) -> Result<(), String> {
+async fn save_ffmpeg_clip(
+    state: tauri::State<'_, FfmpegState>,
+    timesync: tauri::State<'_, TimeSyncState>,
+    db: tauri::State<'_, DbPath>,
+) -> Result<(), String> {
+    let start_real = chrono::Utc::now().timestamp_millis() as f64 / 1000.0;
     let mut proc = state.0.lock().await;
-    proc.save().await.map(|_| ())
+    match proc.save().await {
+        Ok(path) => {
+            let dur = proc.segment_seconds * 10;
+            let clip_start_real = start_real - dur as f64;
+            let ts = {
+                let ts_lock = timesync.0.lock().unwrap();
+                ts_lock.clone()
+            };
+            let snaps: Vec<TimeSnapshot> = ts
+                .snapshots
+                .iter()
+                .cloned()
+                .filter(|s| s.real_time >= clip_start_real && s.real_time <= start_real)
+                .collect();
+            let evs: Vec<TimedEvent> = ts
+                .events
+                .iter()
+                .cloned()
+                .filter(|e| e.real_time >= clip_start_real && e.real_time <= start_real)
+                .collect();
+            write_clip_metadata(&db.0, &path, &snaps, &evs, clip_start_real).await.map(|_| ())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[derive(Serialize)]
@@ -627,6 +657,7 @@ pub fn run() {
             let ffmpeg_process: SharedFfmpegProcess = Arc::new(AsyncMutex::new(ffmpeg_proc));
             let obs_ws_client: SharedObsWsClient = Arc::new(Mutex::new(None));
             let status_clone = status.clone();
+            let timesync_state = TimeSyncState(Arc::new(Mutex::new(TimeSyncData::default())));
             let settings_state = SettingsState(Arc::new(Mutex::new(settings_for_state)));
             let settings_state_clone2 = settings_state.clone();
             let settings_path_state = SettingsPath(config_path.clone());
@@ -637,6 +668,7 @@ pub fn run() {
             _app.manage(settings_state);
             _app.manage(settings_path_state);
             _app.manage(db_state.clone());
+            _app.manage(timesync_state.clone());
 
             let dir = settings.save_dir.clone();
             let obs_ws_client_clone2 = obs_ws_client.clone();
@@ -647,9 +679,10 @@ pub fn run() {
             let obs_ws_client_clone = obs_ws_client.clone();
             let ffmpeg_process_clone = ffmpeg_process.clone();
             let db_path_clone = db_state.clone();
+            let timesync_state_clone = timesync_state.clone();
 
             tauri::async_runtime::spawn(async move {
-                poll_lol_events(settings_state_clone2, move |all_data: &AllGameData, new_events: Vec<LolEvent>| {
+                poll_lol_events(settings_state_clone2, timesync_state_clone.clone(), move |all_data: &AllGameData, new_events: Vec<LolEvent>| {
                     let mut status = status_clone.lock().unwrap();
                     if status.game_state == GameState::NotStarted {
                         status.game_state = GameState::InProgress;
@@ -689,16 +722,27 @@ pub fn run() {
                                             tauri::async_runtime::spawn({
                                                 let db_path = db_path_clone.0.clone();
                                                 async move {
+                                                    let start_real = chrono::Utc::now().timestamp_millis() as f64 / 1000.0;
                                                     let mut proc = ffmpeg_clone.lock().await;
                                                     match proc.save().await {
                                                         Ok(path) => {
                                                             let dur = proc.segment_seconds * 10;
-                                                            let clip_start = event_clone.EventTime - dur as f64;
-                                                            let relevant_events: Vec<LolEvent> = events_snapshot
-                                                                .into_iter()
-                                                                .filter(|ev| ev.EventTime >= clip_start)
+                                                            let clip_start_real = start_real - dur as f64;
+                                                            let ts = {
+                                                                let ts_lock = timesync_state_clone.0.lock().unwrap();
+                                                                ts_lock.clone()
+                                                            };
+                                                            let snaps: Vec<TimeSnapshot> = ts.snapshots
+                                                                .iter()
+                                                                .cloned()
+                                                                .filter(|s| s.real_time >= clip_start_real && s.real_time <= start_real)
                                                                 .collect();
-                                                            if let Err(e) = write_clip_metadata(&db_path, &path, &relevant_events, clip_start).await {
+                                                            let evs: Vec<TimedEvent> = ts.events
+                                                                .iter()
+                                                                .cloned()
+                                                                .filter(|e| e.real_time >= clip_start_real && e.real_time <= start_real)
+                                                                .collect();
+                                                            if let Err(e) = write_clip_metadata(&db_path, &path, &snaps, &evs, clip_start_real).await {
                                                                 eprintln!("Failed to write metadata: {}", e);
                                                             }
                                                         }
@@ -723,6 +767,12 @@ pub fn run() {
                                 status.obs_state = ObsState::Recording;
                                 status.is_recording = true;
                                 status.replay_buffer_running = false;
+
+                                {
+                                    let mut ts = timesync_state_clone.0.lock().unwrap();
+                                    ts.snapshots.clear();
+                                    ts.events.clear();
+                                }
 
                                 match mode {
                                     RecordingMode::Obs => {
@@ -761,6 +811,12 @@ pub fn run() {
                                 status.obs_state = ObsState::NotRecording;
                                 status.is_recording = false;
                                 status.replay_buffer_running = false;
+
+                                {
+                                    let mut ts = timesync_state_clone.0.lock().unwrap();
+                                    ts.snapshots.clear();
+                                    ts.events.clear();
+                                }
                                 
                                 match mode {
                                     RecordingMode::Obs => {
@@ -807,7 +863,7 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-async fn poll_lol_events<F>(settings: SettingsState, mut callback: F)
+async fn poll_lol_events<F>(settings: SettingsState, timesync: TimeSyncState, mut callback: F)
 where
     F: FnMut(&AllGameData, Vec<LolEvent>) + Send + 'static,
 {
@@ -836,12 +892,20 @@ where
                 if let Ok(body) = response.text().await {
                     match serde_json::from_str::<AllGameData>(&body) {
                         Ok(all_data) => {
+                            let now = chrono::Utc::now().timestamp_millis() as f64 / 1000.0;
                             let current_time = all_data.gameData.gameTime;
+                            {
+                                let mut ts = timesync.0.lock().unwrap();
+                                ts.snapshots.push(TimeSnapshot { game_time: current_time, real_time: now });
+                            }
 
                             for event in all_data.clone().events.events.into_iter() {
                                 if !seen_event_ids.contains(&event.EventID) {
                                     seen_event_ids.insert(event.EventID.clone());
                                     pending_events.push((event.clone(), event.EventTime.clone()));
+                                    let real = crate::timesync::game_to_real_time(event.EventTime, &timesync.0.lock().unwrap().snapshots)
+                                        .unwrap_or(now);
+                                    timesync.0.lock().unwrap().events.push(TimedEvent { event: event.clone(), real_time: real });
                                 }
                             }
 

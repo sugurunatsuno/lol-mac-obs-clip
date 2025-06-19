@@ -60,9 +60,12 @@ async function init() {
   let markers;
   let currentIndex = 0;
   let events = [];
+  let timeMap = [];
 
   try {
-    events = await invoke('get_clip_metadata', { path: file });
+    const meta = await invoke('get_clip_metadata', { path: file });
+    events = meta.events || [];
+    timeMap = meta.time_map || [];
   } catch (e) {
     console.error('Failed to load clip metadata', e);
   }
