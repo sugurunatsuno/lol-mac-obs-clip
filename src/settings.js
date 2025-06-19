@@ -1,6 +1,7 @@
 // Rust 側との通信に使用する invoke を取得
 const { invoke } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
+import { isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notification';
 // Tauri API の基本機能を利用
 
 // input 要素から整数値を取得し、最小値チェックを行うユーティリティ
@@ -20,6 +21,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     await loadDevices(); // ffmpeg 用のデバイス一覧を取得
   }
   await loadSettings(); // 保存済み設定を画面へ反映
+  if (!(await isPermissionGranted())) {
+    await requestPermission();
+  }
   // 各ボタンにイベントリスナーを設定
   document.getElementById('modeToggle')?.addEventListener('change', async (e) => {
     const mode = e.target.checked ? 'Shell' : 'Obs';

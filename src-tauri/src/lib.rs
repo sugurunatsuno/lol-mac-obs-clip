@@ -8,6 +8,7 @@ use tokio::process::Command;
 use std::process::Stdio;
 use reqwest::Client;
 use tauri::{async_runtime::spawn, Manager};
+use tauri_plugin_notification::NotificationExt;
 use std::path::PathBuf;
 
 mod settings; // 設定関連
@@ -58,6 +59,18 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+fn notify(app: &tauri::AppHandle, title: &str, body: &str) {
+    if let Err(e) = app
+        .notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+    {
+        eprintln!("failed to show notification: {}", e);
+    }
+}
+
 #[tauri::command]
 fn get_status(state: tauri::State<AppStatusState>) -> AppStatus {
     state.0.lock().unwrap().clone()
@@ -74,6 +87,7 @@ async fn set_recording_mode(state: tauri::State<'_, AppStatusState>, mode: Recor
 
 #[tauri::command]
 async fn start_recording(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppStatusState>,
     obs_state: tauri::State<'_, ObsWsState>,
     ffmpeg_state: tauri::State<'_, FfmpegState>,
@@ -87,7 +101,7 @@ async fn start_recording(
         lock.replay_buffer_running = false;
         lock.recording_mode.clone()
     };
-    match mode {
+    let res = match mode {
         RecordingMode::Obs => {
             spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartRecord")); // OBS 録画開始
             Ok(())
@@ -98,11 +112,14 @@ async fn start_recording(
             let mut proc = shared.lock().await;
             proc.start(shared.clone()).await
         }
-    }
+    };
+    notify(&app, "録画開始", "録画を開始しました");
+    res
 }
 
 #[tauri::command]
 async fn stop_recording(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppStatusState>,
     obs_state: tauri::State<'_, ObsWsState>,
     ffmpeg_state: tauri::State<'_, FfmpegState>,
@@ -116,7 +133,7 @@ async fn stop_recording(
         lock.replay_buffer_running = false;
         lock.recording_mode.clone()
     };
-    match mode {
+    let res = match mode {
         RecordingMode::Obs => {
             spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopRecord")); // OBS 停止
             Ok(())
@@ -125,11 +142,14 @@ async fn stop_recording(
             let mut proc = ffmpeg_state.0.lock().await;
             proc.stop().await
         }
-    }
+    };
+    notify(&app, "録画停止", "録画を停止しました");
+    res
 }
 
 #[tauri::command]
 async fn start_replay_buffer(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppStatusState>,
     obs_state: tauri::State<'_, ObsWsState>,
     ffmpeg_state: tauri::State<'_, FfmpegState>,
@@ -141,7 +161,7 @@ async fn start_replay_buffer(
         lock.replay_buffer_running = true;
         lock.recording_mode.clone()
     };
-    match mode {
+    let res = match mode {
         RecordingMode::Obs => {
             spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartReplayBuffer")); // OBS 側でリプレイ開始
             Ok(())
@@ -152,11 +172,14 @@ async fn start_replay_buffer(
             let mut proc = shared.lock().await;
             proc.start(shared.clone()).await
         }
-    }
+    };
+    notify(&app, "リプレイバッファ開始", "リプレイバッファを開始しました");
+    res
 }
 
 #[tauri::command]
 async fn stop_replay_buffer(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppStatusState>,
     obs_state: tauri::State<'_, ObsWsState>,
     ffmpeg_state: tauri::State<'_, FfmpegState>,
@@ -168,7 +191,7 @@ async fn stop_replay_buffer(
         lock.replay_buffer_running = false;
         lock.recording_mode.clone()
     };
-    match mode {
+    let res = match mode {
         RecordingMode::Obs => {
             spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopReplayBuffer")); // OBS リプレイ停止
             Ok(())
@@ -177,17 +200,20 @@ async fn stop_replay_buffer(
             let mut proc = ffmpeg_state.0.lock().await;
             proc.stop().await
         }
-    }
+    };
+    notify(&app, "リプレイバッファ停止", "リプレイバッファを停止しました");
+    res
 }
 
 #[tauri::command]
 async fn save_replay_buffer(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppStatusState>,
     obs_state: tauri::State<'_, ObsWsState>,
     ffmpeg_state: tauri::State<'_, FfmpegState>,
 ) -> Result<(), String> {
     let mode = { state.0.lock().unwrap().recording_mode.clone() };
-    match mode {
+    let res = match mode {
         RecordingMode::Obs => {
             spawn(send_obs_command_wrapper(obs_state.0.clone(), "SaveReplayBuffer")); // OBS に保存指示
             Ok(())
@@ -196,7 +222,9 @@ async fn save_replay_buffer(
             let mut proc = ffmpeg_state.0.lock().await;
             proc.save().await.map(|_| ())
         }
-    }
+    };
+    notify(&app, "クリップ保存", "リプレイバッファを保存しました");
+    res
 }
 
 #[tauri::command]
@@ -318,6 +346,7 @@ async fn save_settings_cmd(
 
 #[tauri::command]
 async fn start_ffmpeg_replay(
+    app: tauri::AppHandle,
     status_state: tauri::State<'_, AppStatusState>,
     state: tauri::State<'_, FfmpegState>,
     segment_seconds: Option<u32>,
@@ -357,11 +386,14 @@ async fn start_ffmpeg_replay(
     if let Some(b) = bitrate {
         proc.set_bitrate(b);
     }
-    proc.start(shared).await
+    let res = proc.start(shared).await;
+    notify(&app, "ffmpeg バッファ開始", "リプレイバッファを開始しました");
+    res
 }
 
 #[tauri::command]
 async fn stop_ffmpeg_replay(
+    app: tauri::AppHandle,
     status_state: tauri::State<'_, AppStatusState>,
     state: tauri::State<'_, FfmpegState>,
 ) -> Result<(), String> {
@@ -370,13 +402,17 @@ async fn stop_ffmpeg_replay(
         let mut status = status_state.0.lock().unwrap();
         status.replay_buffer_running = false;
     }
-    proc.stop().await
+    let res = proc.stop().await;
+    notify(&app, "ffmpeg バッファ停止", "リプレイバッファを停止しました");
+    res
 }
 
 #[tauri::command]
-async fn save_ffmpeg_clip(state: tauri::State<'_, FfmpegState>) -> Result<(), String> {
+async fn save_ffmpeg_clip(app: tauri::AppHandle, state: tauri::State<'_, FfmpegState>) -> Result<(), String> {
     let mut proc = state.0.lock().await;
-    proc.save().await.map(|_| ())
+    let res = proc.save().await.map(|_| ());
+    notify(&app, "クリップ保存", "リプレイバッファを保存しました");
+    res
 }
 
 #[derive(Serialize)]
@@ -551,6 +587,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             get_status,
             set_recording_mode,
@@ -621,6 +658,7 @@ pub fn run() {
             let obs_ws_client_clone = obs_ws_client.clone();
             let ffmpeg_process_clone = ffmpeg_process.clone();
             let db_path_clone = db_state.clone();
+            let app_clone = _app.app_handle();
 
             tauri::async_runtime::spawn(async move {
                 poll_lol_events(move |all_data: &AllGameData, new_events: Vec<LolEvent>| {
@@ -653,6 +691,7 @@ pub fn run() {
                                                     eprintln!("Failed to send Multikill command to OBS: {}", e);
                                                 } else {
                                                     println!("Sent Multikill command to OBS");
+                                                    notify(&app_clone, "クリップ保存", "リプレイバッファを保存しました");
                                                 }
                                             });
                                         }
@@ -675,6 +714,7 @@ pub fn run() {
                                                             if let Err(e) = write_clip_metadata(&db_path, &path, &relevant_events, clip_start).await {
                                                                 eprintln!("Failed to write metadata: {}", e);
                                                             }
+                                                            notify(&app_clone, "クリップ保存", "リプレイバッファを保存しました");
                                                         }
                                                         Err(e) => {
                                                             eprintln!("Failed to save clip: {}", e);
@@ -701,29 +741,31 @@ pub fn run() {
                                 match mode {
                                     RecordingMode::Obs => {
                                         let obs_client_clone = obs_ws_client_clone.clone();
-                                        tauri::async_runtime::spawn(async move {
-                                            if let Err(e) = send_obs_command_wrapper(obs_client_clone, "StartRecord").await {
-                                                eprintln!("Failed to start OBS recording: {}", e);
-                                            } else {
-                                                println!("Started OBS recording");
-                                            }
-                                        });
-                                    }
-                                    RecordingMode::Shell => {
-                                        let ffmpeg_clone = ffmpeg_process_clone.clone();
-                                        tauri::async_runtime::spawn({
-                                            let ffmpeg_process_clone = ffmpeg_process_clone.clone();
-                                            async move {
-                                                if let Err(e) = ffmpeg_clone.lock().await.start(ffmpeg_process_clone).await {
-                                                    eprintln!("Failed to start ffmpeg recording: {}", e);
+                                            tauri::async_runtime::spawn(async move {
+                                                if let Err(e) = send_obs_command_wrapper(obs_client_clone, "StartRecord").await {
+                                                    eprintln!("Failed to start OBS recording: {}", e);
                                                 } else {
-                                                    println!("Started ffmpeg recording");
+                                                    println!("Started OBS recording");
+                                                    notify(&app_clone, "録画開始", "OBS録画を開始しました");
                                                 }
-                                            }
-                                        });
+                                            });
+                                        }
+                                        RecordingMode::Shell => {
+                                            let ffmpeg_clone = ffmpeg_process_clone.clone();
+                                            tauri::async_runtime::spawn({
+                                                let ffmpeg_process_clone = ffmpeg_process_clone.clone();
+                                                async move {
+                                                    if let Err(e) = ffmpeg_clone.lock().await.start(ffmpeg_process_clone).await {
+                                                        eprintln!("Failed to start ffmpeg recording: {}", e);
+                                                    } else {
+                                                        println!("Started ffmpeg recording");
+                                                        notify(&app_clone, "録画開始", "ffmpeg録画を開始しました");
+                                                    }
+                                                }
+                                            });
+                                        }
                                     }
                                 }
-                            }
 
                             // ゲーム終了時にOBSかffmpegの録画を停止
                             "GameEnd" => {
@@ -739,26 +781,28 @@ pub fn run() {
                                 match mode {
                                     RecordingMode::Obs => {
                                         let obs_client_clone = obs_ws_client_clone.clone();
-                                        tauri::async_runtime::spawn(async move {
-                                            if let Err(e) = send_obs_command_wrapper(obs_client_clone, "StopRecord").await {
-                                                eprintln!("Failed to stop OBS recording: {}", e);
-                                            } else {
-                                                println!("Stopped OBS recording");
-                                            }
-                                        });
-                                    }
-                                    RecordingMode::Shell => {
-                                        let ffmpeg_clone = ffmpeg_process_clone.clone();
-                                        tauri::async_runtime::spawn(async move {
-                                            if let Err(e) = ffmpeg_clone.lock().await.stop().await {
-                                                eprintln!("Failed to stop ffmpeg recording: {}", e);
-                                            } else {
-                                                println!("Stopped ffmpeg recording");
-                                            }
-                                        });
+                                            tauri::async_runtime::spawn(async move {
+                                                if let Err(e) = send_obs_command_wrapper(obs_client_clone, "StopRecord").await {
+                                                    eprintln!("Failed to stop OBS recording: {}", e);
+                                                } else {
+                                                    println!("Stopped OBS recording");
+                                                    notify(&app_clone, "録画停止", "OBS録画を停止しました");
+                                                }
+                                            });
+                                        }
+                                        RecordingMode::Shell => {
+                                            let ffmpeg_clone = ffmpeg_process_clone.clone();
+                                            tauri::async_runtime::spawn(async move {
+                                                if let Err(e) = ffmpeg_clone.lock().await.stop().await {
+                                                    eprintln!("Failed to stop ffmpeg recording: {}", e);
+                                                } else {
+                                                    println!("Stopped ffmpeg recording");
+                                                    notify(&app_clone, "録画停止", "ffmpeg録画を停止しました");
+                                                }
+                                            });
+                                        }
                                     }
                                 }
-                            }
                             _ => {
                                 println!("Unhandled event: {} at {}", event.EventName, event.EventTime);
                             }
