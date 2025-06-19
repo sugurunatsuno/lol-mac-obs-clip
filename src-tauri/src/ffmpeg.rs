@@ -186,10 +186,20 @@ impl FfmpegProcess {
 
         let save_path = dir.join(".trigger_save");
         let quit_path = dir.join(".trigger_quit");
+        let check_dir = dir.clone();
         // 保存や停止を外部から指示するための監視タスク
         tauri::async_runtime::spawn(async move {
             use tokio::time::{sleep, Duration};
             loop {
+                if fs::metadata(&check_dir).await.is_err() {
+                    break;
+                }
+                {
+                    let p = shared.lock().await;
+                    if p.child.is_none() {
+                        break;
+                    }
+                }
                 if fs::metadata(&save_path).await.is_ok() {
                     // .trigger_save を検知したらバッファを保存
                     println!("Save trigger detected, saving current buffer");
@@ -217,6 +227,7 @@ impl FfmpegProcess {
         if let Some(mut child) = self.child.take() {
             println!("Stopping ffmpeg process");
             let _ = child.kill(); // プロセス終了を試みる
+            let _ = child.wait(); // ゾンビ化を防ぐために待機
         }
         if let Some(dir) = &self.ram_dir {
             // 作成した一時ディレクトリを削除
