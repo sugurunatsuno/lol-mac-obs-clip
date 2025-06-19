@@ -91,6 +91,7 @@ impl FfmpegProcess {
     }
 
     pub fn set_save_dir(&mut self, dir: PathBuf) {
+        println!("Set save directory to {:?}", dir);
         // クリップ保存先ディレクトリ
         self.save_dir = dir;
     }
@@ -115,6 +116,10 @@ impl FfmpegProcess {
 
         // セグメント保存用ディレクトリを作成
         let dir = PathBuf::from("/tmp/lol_obs_clip/replay");
+        println!(
+            "Creating segment directory {:?} (segment_seconds={}, wrap_count={}, fps={}, bitrate={})",
+            dir, self.segment_seconds, self.wrap_count, self.fps, self.bitrate
+        );
         if dir.exists() {
             fs::remove_dir_all(&dir).await.map_err(|e| e.to_string())?;
         }
@@ -122,53 +127,54 @@ impl FfmpegProcess {
 
         // GOP 長をセグメント長と FPS から計算
         let gop = self.fps * self.segment_seconds;
+        let mut args: Vec<String> = Vec::new();
+        args.push("-f".into());
+        args.push("avfoundation".into());
+        args.push("-pixel_format".into());
+        args.push("nv12".into());
+        args.push("-framerate".into());
+        args.push((self.fps * 2).to_string());
+        args.push("-i".into());
+        args.push(format!("{}:{}", self.video_source, self.audio_source));
+        args.push("-vf".into());
+        args.push(format!("fps={},format=yuv420p", self.fps));
+        args.push("-c:v".into());
+        args.push("h264_videotoolbox".into());
+        args.push("-realtime".into());
+        args.push("1".into());
+        args.push("-bf".into());
+        args.push("0".into());
+        args.push("-b:v".into());
+        args.push(self.bitrate.clone());
+        args.push("-g".into());
+        args.push(gop.to_string());
+        args.push("-keyint_min".into());
+        args.push(gop.to_string());
+        args.push("-sc_threshold".into());
+        args.push("0".into());
+        args.push("-force_key_frames".into());
+        args.push(format!("expr:gte(t,n_forced*{}-0.1)", self.segment_seconds));
+        args.push("-an".into());
+        args.push("-f".into());
+        args.push("segment".into());
+        args.push("-segment_time".into());
+        args.push(self.segment_seconds.to_string());
+        args.push("-segment_format".into());
+        args.push("ts".into());
+        args.push("-segment_wrap".into());
+        args.push(self.wrap_count.to_string());
+        args.push("-segment_list".into());
+        args.push(dir.join("list.m3u8").to_string_lossy().into_owned());
+        args.push("-segment_list_size".into());
+        args.push(self.wrap_count.to_string());
+        args.push("-segment_list_type".into());
+        args.push("m3u8".into());
+        args.push("-segment_list_flags".into());
+        args.push("+live".into());
+        args.push(dir.join("seg%03d.ts").to_string_lossy().into_owned());
+        println!("Running ffmpeg command: {:?} {:?}", self.ffmpeg_path, args);
         let child = Command::new(&self.ffmpeg_path)
-            .args([
-                "-f",
-                "avfoundation",
-                "-pixel_format",
-                "nv12",
-                "-framerate",
-                &(self.fps * 2).to_string(),
-                "-i",
-                &format!("{}:{}", self.video_source, self.audio_source),
-                "-vf",
-                &format!("fps={},format=yuv420p", self.fps),
-                "-c:v",
-                "h264_videotoolbox",
-                "-realtime",
-                "1",
-                "-bf",
-                "0",
-                "-b:v",
-                &self.bitrate,
-                "-g",
-                &gop.to_string(),
-                "-keyint_min",
-                &gop.to_string(),
-                "-sc_threshold",
-                "0",
-                "-force_key_frames",
-                &format!("expr:gte(t,n_forced*{}-0.1)", self.segment_seconds),
-                "-an",
-                "-f",
-                "segment",
-                "-segment_time",
-                &self.segment_seconds.to_string(),
-                "-segment_format",
-                "ts",
-                "-segment_wrap",
-                &self.wrap_count.to_string(),
-                "-segment_list",
-                &dir.join("list.m3u8").to_string_lossy(),
-                "-segment_list_size",
-                &self.wrap_count.to_string(),
-                "-segment_list_type",
-                "m3u8",
-                "-segment_list_flags",
-                "+live",
-                &dir.join("seg%03d.ts").to_string_lossy(),
-            ])
+            .args(&args)
             .spawn() // ffmpeg プロセス開始
             .map_err(|e| e.to_string())?;
 
@@ -209,6 +215,7 @@ impl FfmpegProcess {
     pub async fn stop(&mut self) -> Result<(), String> {
         // ffmpeg プロセスと一時ディレクトリを後始末
         if let Some(mut child) = self.child.take() {
+            println!("Stopping ffmpeg process");
             let _ = child.kill(); // プロセス終了を試みる
         }
         if let Some(dir) = &self.ram_dir {
@@ -237,6 +244,10 @@ impl FfmpegProcess {
         out.push(format!("replay_{}.mp4", ts)); // 保存先ファイル名を決定
 
         // ffmpeg を呼び出してクリップを出力
+        println!(
+            "Saving replay buffer to {:?} (offset={}, duration={})",
+            out, offset, dur
+        );
         let output = Command::new(&self.ffmpeg_path)
             .args([
                 "-nostdin",
@@ -260,7 +271,9 @@ impl FfmpegProcess {
             return Err(String::from_utf8_lossy(&output.stderr).to_string());
         }
 
+        println!("Saved clip to {:?}", out);
         // 正常終了した場合は保存先パスを返す
+
         Ok(out)
     }
 }
