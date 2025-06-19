@@ -68,6 +68,16 @@
       </div>
     </main>
 
-    <script>window.addEventListener("DOMContentLoaded",()=>{const t=document.getElementById("modeToggle");if(t){t.checked=false;t.disabled=true;}});</script>
+    <script>
+      window.addEventListener("DOMContentLoaded", () => {
+        const t = document.getElementById("modeToggle");
+        if (t) {
+          t.checked = false;
+          t.disabled = true;
+        }
+        // ページ遷移時にアプリの録画モードも OBS に更新する
+        window.__TAURI__.core.invoke("set_recording_mode", { mode: "Obs" });
+      });
+    </script>
   </body>
 </html>
