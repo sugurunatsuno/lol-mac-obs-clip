@@ -7,6 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Saved Videos - LoL Clip Tool</title>
     <script type="module" src="/videos.js" defer></script>
+    <script type="module" src="/debug.js" defer></script>
   </head>
     <body class="h-screen flex flex-col overscroll-none">
     <nav class="bg-gray-800 text-gray-100 py-2 fixed top-0 left-0 w-full z-10 overscroll-none">
@@ -16,6 +17,7 @@
         <a class="hover:text-blue-400" href="obs.html">OBS Mode</a>
         <a class="hover:text-blue-400" href="ffmpeg.html">FFmpeg Mode</a>
         <a class="hover:text-blue-400" href="videos.html">Videos</a>
+        <span id="debugStatus" class="ml-auto text-sm text-gray-400"></span>
       </div>
     </nav>
     <main class="container py-4 app-container overscroll-none flex-1">

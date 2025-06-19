@@ -101,6 +101,8 @@ Tauri アプリからリプレイバッファを開始する際に、`ffmpeg_rep
 | **Saved Videos** | `videos.html` | ナビバーから全画面へ。項目をクリックすると **Video Detail** を開きます | `list_saved_videos` |
 | **Video Detail** | `video.html` | ナビバーから全画面へ | – (`convertFileSrc` を使用してローカル再生) |
 
+ナビバー右端には現在の録画モードや録画中かどうかといったデバッグ用ステータスが表示されます。OBS を利用している場合は `OBS`、シェル録画 (ffmpeg) を利用している場合は `ffmpeg` と表示されるので、動作確認に活用してください。
+
 
 ## デバッグ実行
 

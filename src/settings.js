@@ -140,7 +140,18 @@ async function updateStatus() {
   if (saveBtn) {
     saveBtn.disabled = !status.replay_buffer_running;
   }
-} // updateStatus end
+ // updateStatus end
+  const dbg = document.getElementById('debugStatus');
+  if (dbg) {
+    const modeText = status.recording_mode === 'Shell' ? 'ffmpeg' : 'OBS';
+    const recText = status.is_recording
+      ? status.replay_buffer_running
+        ? 'Buffering'
+        : 'Recording'
+      : 'Idle';
+    dbg.textContent = `Mode: ${modeText} | ${recText}`;
+  }
+}
 
 // 画面のログ欄へテキストを追加
 function logEvent(message) {
