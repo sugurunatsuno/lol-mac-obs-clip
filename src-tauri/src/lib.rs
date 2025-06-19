@@ -665,11 +665,13 @@ pub fn run() {
                             "Multikill" => {
                                 if let Some(killer_name) = &event.KillerName {
                                     // アクティブプレイヤーの名前がキルしたプレイヤー名に含まれているか確認：うまく取れていない
-                                    // if !killer_name.contains(all_data.activePlayer.summonerName.as_str()) {
-                                    //     continue;
-                                    // }
+                                    if !killer_name.contains(all_data.activePlayer.riotIdGameName.as_str()) {
+                                        println!("Killer name does not match active player: {} != {}", killer_name, all_data.activePlayer.riotIdGameName);
+                                        continue;
+                                    }
 
                                     println!("{} multikill by {}: {}, active_player: {}", event.EventTime, killer_name, event.EventName, all_data.activePlayer.summonerName);
+                                    println!("Game Time: {}, Event Time:{}", all_data.gameData.gameTime, event.EventTime);
 
                                     match mode {
                                         RecordingMode::Obs => {
@@ -860,32 +862,6 @@ where
                                 callback(&all_data, ready_events);
                             }
 
-                            // デバッグ用
-                            if true {
-                                // JSONを整形して出力
-                                let json_output = serde_json::to_string_pretty(&all_data)
-                                    .unwrap_or_else(|_| "{}".to_string());
-                                // 現在の時刻でファイル名を生成、保存
-                                // ディレクトリは~/Documents/LOLReplayに保存
-                                let mut save_dir =
-                                    dirs::document_dir().unwrap_or_else(|| PathBuf::from("."));
-                                save_dir.push("LOLReplay");
-                                if !save_dir.exists() {
-                                    std::fs::create_dir_all(&save_dir).unwrap_or_else(|_| {
-                                        eprintln!(
-                                            "Failed to create LOLReplay directory: {:?}",
-                                            save_dir
-                                        );
-                                    });
-                                }
-                                let file_path = save_dir.join(format!(
-                                    "lol_event_{}.json",
-                                    chrono::Utc::now().format("%Y%m%d_%H%M%S")
-                                ));
-                                std::fs::write(&file_path, json_output).unwrap_or_else(|_| {
-                                    eprintln!("Failed to write JSON to file: {:?}", file_path);
-                                });
-                            }
                         }
                         Err(e) => {
                             eprintln!("Failed to parse AllGameData from response: {}", e);
