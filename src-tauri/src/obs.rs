@@ -4,6 +4,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 use tokio::net::TcpStream;
 use futures_util::{SinkExt, StreamExt};
 use std::sync::{Arc, Mutex};
+// WebSocket 通信に必要なクレート群をインポート
 
 pub type WsType = WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>;
 
@@ -11,10 +12,12 @@ pub type WsType = WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>;
 pub struct ObsWsClient {
     ws: WsType,
 }
+// 単純なラッパーで WebSocket ストリームを保持
 
 impl ObsWsClient {
     /// OBS WebSocket に接続し Identify ハンドシェイクを行う
     pub async fn connect_and_identify(url: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        // OBS WebSocket へ接続
         let (mut ws_stream, _) = connect_async(url).await?;
         // 1. Hello を受信
         let msg = ws_stream.next().await;
@@ -56,11 +59,12 @@ impl ObsWsClient {
             }
         });
         self.ws.send(Message::Text(req.to_string().into())).await?;
-        Ok(())
+        Ok(()) // エラーは上位で処理
     }
 
     /// コマンド送信後、レスポンスを待って値を返す
     pub async fn send_request(&mut self, command: &str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        // リクエストを投げてレスポンスを待つ
         let req = json!({
             "op": 6,
             "d": {
@@ -73,7 +77,7 @@ impl ObsWsClient {
             let val: serde_json::Value = serde_json::from_str(&resp)?;
             Ok(val)
         } else {
-            Err("No response".into())
+            Err("No response".into()) // 応答が無い場合
         }
     }
 }
@@ -83,6 +87,7 @@ pub struct ObsWsState(pub SharedObsWsClient);
 
 /// Send OBS command ensuring connection is established
 pub async fn send_obs_command_wrapper(shared: SharedObsWsClient, command: &str) -> Result<(), String> {
+    // 接続が無い場合は自動で接続を行う
     let mut needs_connect = false;
     {
         let client_guard = shared.lock().unwrap();
@@ -110,7 +115,7 @@ pub async fn send_obs_command_wrapper(shared: SharedObsWsClient, command: &str) 
         let mut guard = shared.lock().unwrap();
         *guard = client_opt;
     }
-    result
+    result // 結果をそのまま返す
 }
 
 /// Send OBS command and return the response
@@ -141,11 +146,12 @@ pub async fn send_obs_request_wrapper(shared: SharedObsWsClient, command: &str) 
         let mut guard = shared.lock().unwrap();
         *guard = client_opt;
     }
-    result
+    result // 正常時は Ok(())
 }
 
 /// OBS 側の録画保存先ディレクトリを変更する
 pub async fn set_record_directory(shared: SharedObsWsClient, dir: &str) -> Result<(), String> {
+    // ディレクトリ設定前に接続確認
     let mut needs_connect = false;
     {
         let client_guard = shared.lock().unwrap();

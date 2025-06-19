@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::{Command};
 use std::process::Child as CommandChild;
 use tauri::Manager;
+// ffmpeg 制御に必要な標準ライブラリと Tauri の型をインポート
 
 use crate::lol::LolEvent;
 use tokio::fs;
@@ -33,6 +34,7 @@ pub struct FfmpegProcess {
     pub bitrate: String,
     pub save_dir: PathBuf,
 }
+// ffmpeg 実行に必要な状態をまとめた構造体
 
 impl FfmpegProcess {
     pub fn new(ffmpeg_path: PathBuf) -> Self {
@@ -51,36 +53,45 @@ impl FfmpegProcess {
             save_dir: default_save_dir_path(),
         }
     }
+    // 各種 setter でパラメータを変更可能
 
     pub fn set_segment_seconds(&mut self, secs: u32) {
+        // 1 セグメントの長さを更新
         self.segment_seconds = secs;
     }
 
     pub fn set_video_source(&mut self, src: String) {
+        // キャプチャするビデオデバイス番号
         self.video_source = src;
     }
 
     pub fn set_ffmpeg_path(&mut self, path: PathBuf) {
+        // 利用する ffmpeg 実行ファイルを差し替え
         self.ffmpeg_path = path;
     }
 
     pub fn set_audio_source(&mut self, src: String) {
+        // キャプチャするオーディオデバイス番号
         self.audio_source = src;
     }
 
     pub fn set_fps(&mut self, fps: u32) {
+        // 出力フレームレートを設定
         self.fps = fps;
     }
 
     pub fn set_wrap_count(&mut self, wrap: u32) {
+        // 保持するセグメント数を設定
         self.wrap_count = wrap;
     }
 
     pub fn set_bitrate(&mut self, bitrate: String) {
+        // エンコード時のビットレート
         self.bitrate = bitrate;
     }
 
     pub fn set_save_dir(&mut self, dir: PathBuf) {
+        // クリップ保存先ディレクトリ
         self.save_dir = dir;
     }
 
@@ -162,22 +173,26 @@ impl FfmpegProcess {
             .map_err(|e| e.to_string())?;
 
         self.child = Some(child);
+        // プロセスハンドルを保存しておく
 
         self.ram_dir = Some(dir.clone());
+        // 一時保存用ディレクトリのパス
 
         let save_path = dir.join(".trigger_save");
         let quit_path = dir.join(".trigger_quit");
-        // ファイルトリガー監視タスクを起動
+        // 保存や停止を外部から指示するための監視タスク
         tauri::async_runtime::spawn(async move {
             use tokio::time::{sleep, Duration};
             loop {
                 if fs::metadata(&save_path).await.is_ok() {
+                    // .trigger_save を検知したらバッファを保存
                     println!("Save trigger detected, saving current buffer");
                     let _ = fs::remove_file(&save_path).await;
                     let mut p = shared.lock().await;
                     let _ = p.save().await;
                 }
                 if fs::metadata(&quit_path).await.is_ok() {
+                    // .trigger_quit を検知したらプロセスを終了
                     println!("Quit trigger detected, stopping ffmpeg process");
                     let _ = fs::remove_file(&quit_path).await;
                     let mut p = shared.lock().await;
@@ -197,6 +212,7 @@ impl FfmpegProcess {
             let _ = child.kill(); // プロセス終了を試みる
         }
         if let Some(dir) = &self.ram_dir {
+            // 作成した一時ディレクトリを削除
             let _ = fs::remove_dir_all(dir).await;
         }
         self.ram_device = None;
@@ -213,7 +229,7 @@ impl FfmpegProcess {
             return Err("ffmpeg not running".into());
         };
 
-        let offset = -(self.wrap_count as i32 - 1);
+        let offset = -(self.wrap_count as i32 - 1); // ラップしている分の開始位置
         let dur = self.segment_seconds * (self.wrap_count - 1);
         let ts = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
         let mut out = self.save_dir.clone();
@@ -237,13 +253,14 @@ impl FfmpegProcess {
                 "+faststart",
                 &out.to_string_lossy(),
             ])
-            .output()
+            .output() // 実際に ffmpeg を実行
             .map_err(|e| e.to_string())?;
         if !output.status.success() {
             // ffmpeg が失敗した場合は stderr を返す
             return Err(String::from_utf8_lossy(&output.stderr).to_string());
         }
 
+        // 正常終了した場合は保存先パスを返す
         Ok(out)
     }
 }
@@ -251,6 +268,7 @@ impl FfmpegProcess {
 /// 複数タスク間で ffmpeg プロセスを共有するための型
 pub type SharedFfmpegProcess = Arc<AsyncMutex<FfmpegProcess>>;
 pub struct FfmpegState(pub SharedFfmpegProcess);
+// アプリ全体で共有するためのラッパー型
 
 pub async fn write_clip_metadata(
     db_path: &std::path::Path,

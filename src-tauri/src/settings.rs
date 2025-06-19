@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+// 設定ファイルの保存先などに利用
 
 use crate::RecordingMode;
 
@@ -18,6 +19,7 @@ pub struct AppSettings {
     #[serde(default = "default_save_dir")]
     pub save_dir: String,
 }
+// アプリ起動時の基本設定をまとめる
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -53,10 +55,12 @@ pub fn save_settings(path: &Path, settings: &AppSettings) -> std::io::Result<()>
         fs::create_dir_all(parent)?;
     }
     // 整形した JSON で書き出す
+    // 書き込み処理を実行
     fs::write(path, serde_json::to_string_pretty(settings).unwrap())
 }
 
 #[derive(Clone)]
 pub struct SettingsPath(pub PathBuf);
+// 設定ファイルのパスを保持するだけのラッパー
 
 pub struct SettingsState(pub std::sync::Arc<std::sync::Mutex<AppSettings>>);
