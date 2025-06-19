@@ -72,4 +72,5 @@ pub fn save_settings(path: &Path, settings: &AppSettings) -> std::io::Result<()>
 pub struct SettingsPath(pub PathBuf);
 // 設定ファイルのパスを保持するだけのラッパー
 
+#[derive(Clone)]
 pub struct SettingsState(pub std::sync::Arc<std::sync::Mutex<AppSettings>>);

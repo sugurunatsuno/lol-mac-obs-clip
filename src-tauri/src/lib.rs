@@ -628,6 +628,7 @@ pub fn run() {
             let obs_ws_client: SharedObsWsClient = Arc::new(Mutex::new(None));
             let status_clone = status.clone();
             let settings_state = SettingsState(Arc::new(Mutex::new(settings_for_state)));
+            let settings_state_clone2 = settings_state.clone();
             let settings_path_state = SettingsPath(config_path.clone());
 
             _app.manage(AppStatusState(status_clone.clone()));
@@ -647,7 +648,6 @@ pub fn run() {
             let ffmpeg_process_clone = ffmpeg_process.clone();
             let db_path_clone = db_state.clone();
 
-            let settings_state_clone2 = settings_state.clone();
             tauri::async_runtime::spawn(async move {
                 poll_lol_events(settings_state_clone2, move |all_data: &AllGameData, new_events: Vec<LolEvent>| {
                     let mut status = status_clone.lock().unwrap();
@@ -840,8 +840,8 @@ where
 
                             for event in all_data.clone().events.events.into_iter() {
                                 if !seen_event_ids.contains(&event.EventID) {
-                                    seen_event_ids.insert(event.EventID);
-                                    pending_events.push((event, event.EventTime));
+                                    seen_event_ids.insert(event.EventID.clone());
+                                    pending_events.push((event.clone(), event.EventTime.clone()));
                                 }
                             }
 
