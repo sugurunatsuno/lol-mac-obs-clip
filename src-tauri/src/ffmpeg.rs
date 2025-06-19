@@ -304,3 +304,115 @@ pub async fn write_clip_metadata(
     // crate::db::write_clip_metadata(db_path, path, events, clip_start).await
     Ok(())
 }
+
+/// 単純な ffmpeg 録画を扱う構造体
+pub struct FfmpegRecorder {
+    pub child: Option<CommandChild>,
+    pub ffmpeg_path: PathBuf,
+    pub video_source: String,
+    pub audio_source: String,
+    pub fps: u32,
+    pub bitrate: String,
+    pub save_dir: PathBuf,
+    pub out_file: Option<PathBuf>,
+}
+
+impl FfmpegRecorder {
+    pub fn new(ffmpeg_path: PathBuf) -> Self {
+        Self {
+            child: None,
+            ffmpeg_path,
+            video_source: "1".into(),
+            audio_source: "none".into(),
+            fps: 30,
+            bitrate: "20M".into(),
+            save_dir: default_save_dir_path(),
+            out_file: None,
+        }
+    }
+
+    pub fn set_video_source(&mut self, src: String) {
+        self.video_source = src;
+    }
+
+    pub fn set_audio_source(&mut self, src: String) {
+        self.audio_source = src;
+    }
+
+    pub fn set_ffmpeg_path(&mut self, path: PathBuf) {
+        self.ffmpeg_path = path;
+    }
+
+    pub fn set_fps(&mut self, fps: u32) {
+        self.fps = fps;
+    }
+
+    pub fn set_bitrate(&mut self, bitrate: String) {
+        self.bitrate = bitrate;
+    }
+
+    pub fn set_save_dir(&mut self, dir: PathBuf) {
+        self.save_dir = dir;
+    }
+
+    /// ffmpeg をバックグラウンドで実行し録画を開始
+    pub async fn start(&mut self) -> Result<(), String> {
+        if let Some(child) = self.child.as_mut() {
+            if child.try_wait().map_err(|e| e.to_string())?.is_none() {
+                return Ok(());
+            }
+        }
+
+        if self.child.is_some() {
+            self.stop().await?;
+        }
+
+        let ts = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+        let mut out = self.save_dir.clone();
+        fs::create_dir_all(&out).await.map_err(|e| e.to_string())?;
+        out.push(format!("record_{}.mp4", ts));
+
+        let gop = self.fps * 2;
+        let args = vec![
+            "-f", "avfoundation",
+            "-pixel_format", "nv12",
+            "-framerate", &(self.fps * 2).to_string(),
+            "-i", &format!("{}:{}", self.video_source, self.audio_source),
+            "-vf", &format!("fps={},format=yuv420p", self.fps),
+            "-c:v", "h264_videotoolbox",
+            "-realtime", "1",
+            "-bf", "0",
+            "-b:v", &self.bitrate,
+            "-g", &gop.to_string(),
+            "-keyint_min", &gop.to_string(),
+            "-sc_threshold", "0",
+            "-movflags", "+faststart",
+            &out.to_string_lossy(),
+        ];
+
+        let child = Command::new(&self.ffmpeg_path)
+            .args(&args)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+
+        self.child = Some(child);
+        self.out_file = Some(out);
+        Ok(())
+    }
+
+    /// 録画を停止し、出力ファイルのパスを返す
+    pub async fn stop(&mut self) -> Result<PathBuf, String> {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        match self.out_file.take() {
+            Some(p) => Ok(p),
+            None => Err("recording not started".into()),
+        }
+    }
+}
+
+/// 複数タスク間で FfmpegRecorder を共有する
+pub type SharedFfmpegRecorder = Arc<AsyncMutex<FfmpegRecorder>>;
+pub struct FfmpegRecorderState(pub SharedFfmpegRecorder);
