@@ -1,6 +1,7 @@
 // 動画再生ページでクリップのメタデータを表示する処理群
 const { convertFileSrc, invoke } = window.__TAURI__.core;
 const {} = window.__TAURI__.path;
+// 動画ファイルパスの変換や Rust コマンド呼び出しに使用
 
 // イベント種類ごとに色を決定するヘルパー
 function eventColor(name) {
@@ -15,6 +16,7 @@ function eventColor(name) {
       return "#6c757d";
   }
 }
+// 取得したイベント名を色に変換
 
 
 // イベント内容を分かりやすいテキストに変換
@@ -28,6 +30,7 @@ function formatEvent(e) {
       return e.EventName;
   }
 }
+// イベント表示用に整形
 
 // プレイヤー初期化とイベントメタデータの読み込み
 async function init() {
@@ -81,7 +84,7 @@ async function init() {
       m.title = `${formatEvent(e)}\n${JSON.stringify(e, null, 2)}`;
       markers.appendChild(m);
     });
-  }
+  } // addMarkers end
 
 
   // 再生位置に合わせて表示するイベントを更新
@@ -105,7 +108,7 @@ async function init() {
         1
       )}s)`;
     }
-  }
+  } // update end
 
   player.on('loadedmetadata', addMarkers); // 再生準備完了時にマーカー追加
   player.on('timeupdate', update); // 再生位置が変わるたびに呼び出し
@@ -113,4 +116,4 @@ async function init() {
 }
 
 // DOM 解析後に初期化処理を実行
-window.addEventListener('DOMContentLoaded', init);
+window.addEventListener('DOMContentLoaded', init); // ページ読み込み時

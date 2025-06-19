@@ -1,6 +1,7 @@
 // Rust 側との通信に使用する invoke を取得
 const { invoke } = window.__TAURI__.core;
 const { open } = window.__TAURI__.dialog;
+// Tauri API の基本機能を利用
 
 // input 要素から整数値を取得し、最小値チェックを行うユーティリティ
 function getInt(id, min = 1) {
@@ -139,7 +140,7 @@ async function updateStatus() {
   if (saveBtn) {
     saveBtn.disabled = !status.replay_buffer_running;
   }
-}
+} // updateStatus end
 
 // 画面のログ欄へテキストを追加
 function logEvent(message) {
@@ -169,7 +170,7 @@ async function loadSettings() {
   if (toggle) toggle.checked = s.recording_mode === 'Shell';
   const dir = document.getElementById('saveDirInput');
   if (dir) dir.value = s.save_dir;
-}
+} // loadSettings end
 
 // ffmpeg が利用可能なデバイス一覧を取得してセレクトボックスへ展開
 async function loadDevices() {
@@ -195,7 +196,7 @@ async function loadDevices() {
   } catch (e) {
     logEvent(`⚠️ デバイス情報の取得に失敗しました: ${e}`);
   }
-}
+} // loadDevices end
 
 // 画面で指定した値を設定ファイルへ保存
 async function saveSettings() {
@@ -224,4 +225,4 @@ async function saveSettings() {
   await invoke('save_settings_cmd', { settings });
   await invoke('set_saved_directory', { dir: settings.save_dir });
   logEvent('⚙️ 設定を保存しました');
-}
+} // saveSettings end
