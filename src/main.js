@@ -3,4 +3,4 @@
 window.addEventListener("DOMContentLoaded", () => {
   // 動的な処理が必要になった場合はここに追記する
   // 例: 初期化コードやイベントリスナー登録
-});
+}); // DOM 準備完了後に実行
