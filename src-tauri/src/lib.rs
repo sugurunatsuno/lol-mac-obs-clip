@@ -9,6 +9,7 @@ use std::time::Duration;
 use tauri::{async_runtime::spawn, Manager};
 use tokio::process::Command;
 use tokio::sync::Mutex as AsyncMutex;
+use tauri_plugin_notification::NotificationExt;
 
 mod db;
 mod ffmpeg; // ffmpeg 管理
@@ -594,7 +595,7 @@ pub fn run() {
             load_settings_cmd,
             save_settings_cmd,
             greet])
-        .setup(move |_app| {
+        .setup( |_app| {
 
             let config_path = _app.path().config_dir().unwrap().join("settings.json");
             let settings = load_settings(&config_path).unwrap_or_default();
@@ -790,6 +791,14 @@ pub fn run() {
                     }
                 }).await;
             });
+
+            // アプリ起動時に通知を表示
+            _app.notification()
+                .builder()
+                .title("LOL Replay")
+                .body("LOL Replay is running")
+                .show()
+                .unwrap();
 
             Ok(())
         })

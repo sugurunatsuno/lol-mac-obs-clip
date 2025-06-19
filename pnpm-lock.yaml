@@ -12,7 +12,7 @@ importers:
         specifier: ~2.2.2
         version: 2.2.2
       '@tauri-apps/plugin-notification':
-        specifier: ~2.2.3
+        specifier: ~2
         version: 2.2.3
     devDependencies:
       '@tauri-apps/cli':

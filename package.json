@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "@tauri-apps/plugin-dialog": "~2.2.2",
-    "@tauri-apps/plugin-notification": "~2.2.3"
+    "@tauri-apps/plugin-notification": "~2"
   }
 }
