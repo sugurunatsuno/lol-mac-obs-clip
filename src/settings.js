@@ -14,6 +14,16 @@ function getInt(id, min = 1) {
   return val; // チェックを通過した値を返す
 }
 
+function getFloat(id, min = 0) {
+  const el = document.getElementById(id);
+  if (!el) return NaN;
+  const val = parseFloat(el.value);
+  if (Number.isNaN(val) || val < min) {
+    throw new Error(`${id} must be a number >= ${min}`);
+  }
+  return val;
+}
+
 // DOM が読み込まれたタイミングで初期化処理を実行
 window.addEventListener("DOMContentLoaded", async () => {
   if (document.getElementById('videoSourceInput')) {
@@ -181,6 +191,8 @@ async function loadSettings() {
   if (toggle) toggle.checked = s.recording_mode === 'Shell';
   const dir = document.getElementById('saveDirInput');
   if (dir) dir.value = s.save_dir;
+  const delay = document.getElementById('eventDelayInput');
+  if (delay) delay.value = s.event_trigger_delay;
 } // loadSettings end
 
 // ffmpeg が利用可能なデバイス一覧を取得してセレクトボックスへ展開
@@ -219,6 +231,7 @@ async function saveSettings() {
     settings.fps = getInt('fpsInput');
     const wrap = getInt('wrapCountInput');
     settings.wrap_count = wrap;
+    settings.event_trigger_delay = getFloat('eventDelayInput', 0);
   } catch (e) {
     alert(e.message);
     return;

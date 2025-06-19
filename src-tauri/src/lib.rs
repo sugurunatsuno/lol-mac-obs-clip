@@ -628,6 +628,7 @@ pub fn run() {
             let obs_ws_client: SharedObsWsClient = Arc::new(Mutex::new(None));
             let status_clone = status.clone();
             let settings_state = SettingsState(Arc::new(Mutex::new(settings_for_state)));
+            let settings_state_clone2 = settings_state.clone();
             let settings_path_state = SettingsPath(config_path.clone());
 
             _app.manage(AppStatusState(status_clone.clone()));
@@ -648,7 +649,7 @@ pub fn run() {
             let db_path_clone = db_state.clone();
 
             tauri::async_runtime::spawn(async move {
-                poll_lol_events(move |all_data: &AllGameData, new_events: Vec<LolEvent>| {
+                poll_lol_events(settings_state_clone2, move |all_data: &AllGameData, new_events: Vec<LolEvent>| {
                     let mut status = status_clone.lock().unwrap();
                     if status.game_state == GameState::NotStarted {
                         status.game_state = GameState::InProgress;
@@ -806,7 +807,7 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-async fn poll_lol_events<F>(mut callback: F)
+async fn poll_lol_events<F>(settings: SettingsState, mut callback: F)
 where
     F: FnMut(&AllGameData, Vec<LolEvent>) + Send + 'static,
 {
@@ -816,11 +817,16 @@ where
         .timeout(Duration::from_secs(1))
         .build()
         .unwrap();
-    let mut last_event_ids: HashSet<i64> = HashSet::new();
+    let mut seen_event_ids: HashSet<i64> = HashSet::new();
+    let mut pending_events: Vec<(LolEvent, f64)> = Vec::new();
 
     println!("Starting LoL event polling...");
 
     loop {
+        let delay_secs = {
+            let lock = settings.0.lock().unwrap();
+            lock.event_trigger_delay
+        };
         match client
             .get("https://127.0.0.1:2999/liveclientdata/allgamedata")
             .send()
@@ -830,19 +836,28 @@ where
                 if let Ok(body) = response.text().await {
                     match serde_json::from_str::<AllGameData>(&body) {
                         Ok(all_data) => {
-                            let new_events: Vec<LolEvent> = all_data
-                                .clone()
-                                .events
-                                .events
-                                .into_iter()
-                                .filter(|event| !last_event_ids.contains(&event.EventID))
-                                .collect();
-                            if !new_events.is_empty() {
-                                println!("New events detected: {}", new_events.len());
-                                callback(&all_data, new_events.clone());
-                                for event in &new_events {
-                                    last_event_ids.insert(event.EventID);
+                            let current_time = all_data.gameData.gameTime;
+
+                            for event in all_data.clone().events.events.into_iter() {
+                                if !seen_event_ids.contains(&event.EventID) {
+                                    seen_event_ids.insert(event.EventID.clone());
+                                    pending_events.push((event.clone(), event.EventTime.clone()));
                                 }
+                            }
+
+                            let mut ready_events = Vec::new();
+                            pending_events.retain(|(ev, detect_time)| {
+                                if current_time - *detect_time >= delay_secs {
+                                    ready_events.push(ev.clone());
+                                    false
+                                } else {
+                                    true
+                                }
+                            });
+
+                            if !ready_events.is_empty() {
+                                println!("Delayed events triggered: {}", ready_events.len());
+                                callback(&all_data, ready_events);
                             }
 
                             // デバッグ用
