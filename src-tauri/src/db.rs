@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
-use serde::{Serialize, Deserialize};
 use crate::lol::LolEvent;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use tokio::fs;
 // ファイル操作やパス操作に必要なクレートを読み込む
 
@@ -14,7 +14,9 @@ pub struct DbPath(pub PathBuf);
 pub async fn init_db(path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         // 親ディレクトリが無ければ作成する
-        fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -38,8 +40,7 @@ pub async fn write_clip_metadata(
         })
         .collect();
     // JSON 文字列へ変換
-    let json = serde_json::to_string_pretty(&events_with_offset)
-        .map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(&events_with_offset).map_err(|e| e.to_string())?;
     // ファイルへ書き出し
     fs::write(out_path, json).await.map_err(|e| e.to_string())
 }
@@ -53,13 +54,12 @@ pub struct EventWithOffset {
 // クリップ内でのイベント発生位置を保持
 
 /// Read clip metadata from the JSON file written by `write_clip_metadata`.
-pub async fn get_clip_events(
-    _db_path: &Path,
-    path: &Path,
-) -> Result<Vec<EventWithOffset>, String> {
+pub async fn get_clip_events(_db_path: &Path, path: &Path) -> Result<Vec<EventWithOffset>, String> {
     // JSON ファイルを開き内容を文字列で取得
     let json_path = path.with_extension("json");
-    let contents = fs::read_to_string(json_path).await.map_err(|e| e.to_string())?;
+    let contents = fs::read_to_string(json_path)
+        .await
+        .map_err(|e| e.to_string())?;
     // JSON を構造体へ変換
     serde_json::from_str(&contents).map_err(|e| e.to_string())
 }

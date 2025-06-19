@@ -1,9 +1,9 @@
 //! OBS WebSocket を使って録画開始/停止などの操作を行うモジュール
-use serde_json::json;
-use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
-use tokio::net::TcpStream;
 use futures_util::{SinkExt, StreamExt};
+use serde_json::json;
 use std::sync::{Arc, Mutex};
+use tokio::net::TcpStream;
+use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 // WebSocket 通信に必要なクレート群をインポート
 
 pub type WsType = WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>;
@@ -16,7 +16,9 @@ pub struct ObsWsClient {
 
 impl ObsWsClient {
     /// OBS WebSocket に接続し Identify ハンドシェイクを行う
-    pub async fn connect_and_identify(url: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn connect_and_identify(
+        url: &str,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         // OBS WebSocket へ接続
         let (mut ws_stream, _) = connect_async(url).await?;
         // 1. Hello を受信
@@ -34,7 +36,9 @@ impl ObsWsClient {
             "op": 1,
             "d": { "rpcVersion": 1, "authentication": null }
         });
-        ws_stream.send(Message::Text(identify.to_string().into())).await?;
+        ws_stream
+            .send(Message::Text(identify.to_string().into()))
+            .await?;
         // 3. Identified を待つ
         let msg = ws_stream.next().await;
         if let Some(Ok(Message::Text(text))) = msg {
@@ -49,7 +53,10 @@ impl ObsWsClient {
     }
 
     /// 応答を待たずにコマンドを送信
-    pub async fn send_command(&mut self, command: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn send_command(
+        &mut self,
+        command: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // OBS へコマンドを投げるだけの簡易送信
         let req = json!({
             "op": 6,
@@ -63,7 +70,10 @@ impl ObsWsClient {
     }
 
     /// コマンド送信後、レスポンスを待って値を返す
-    pub async fn send_request(&mut self, command: &str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn send_request(
+        &mut self,
+        command: &str,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         // リクエストを投げてレスポンスを待つ
         let req = json!({
             "op": 6,
@@ -86,7 +96,10 @@ pub type SharedObsWsClient = Arc<Mutex<Option<ObsWsClient>>>;
 pub struct ObsWsState(pub SharedObsWsClient);
 
 /// Send OBS command ensuring connection is established
-pub async fn send_obs_command_wrapper(shared: SharedObsWsClient, command: &str) -> Result<(), String> {
+pub async fn send_obs_command_wrapper(
+    shared: SharedObsWsClient,
+    command: &str,
+) -> Result<(), String> {
     // 接続が無い場合は自動で接続を行う
     let mut needs_connect = false;
     {
@@ -107,7 +120,10 @@ pub async fn send_obs_command_wrapper(shared: SharedObsWsClient, command: &str) 
         guard.take()
     };
     let result = if let Some(ref mut client) = client_opt {
-        client.send_command(command).await.map_err(|e| e.to_string())
+        client
+            .send_command(command)
+            .await
+            .map_err(|e| e.to_string())
     } else {
         Err("OBS WS Client not connected".into())
     };
@@ -119,7 +135,10 @@ pub async fn send_obs_command_wrapper(shared: SharedObsWsClient, command: &str) 
 }
 
 /// Send OBS command and return the response
-pub async fn send_obs_request_wrapper(shared: SharedObsWsClient, command: &str) -> Result<serde_json::Value, String> {
+pub async fn send_obs_request_wrapper(
+    shared: SharedObsWsClient,
+    command: &str,
+) -> Result<serde_json::Value, String> {
     let mut needs_connect = false;
     {
         let client_guard = shared.lock().unwrap();
@@ -138,7 +157,10 @@ pub async fn send_obs_request_wrapper(shared: SharedObsWsClient, command: &str) 
         guard.take()
     };
     let result = if let Some(ref mut client) = client_opt {
-        client.send_request(command).await.map_err(|e| e.to_string())
+        client
+            .send_request(command)
+            .await
+            .map_err(|e| e.to_string())
     } else {
         Err("OBS WS Client not connected".into())
     };
@@ -195,4 +217,3 @@ pub async fn set_record_directory(shared: SharedObsWsClient, dir: &str) -> Resul
     }
     result
 }
-

@@ -47,7 +47,9 @@ fn default_save_dir() -> String {
 
 pub fn load_settings(path: &Path) -> Option<AppSettings> {
     // JSON を読み込んで構造体へ変換
-    fs::read_to_string(path).ok().and_then(|c| serde_json::from_str(&c).ok())
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
 }
 
 pub fn save_settings(path: &Path, settings: &AppSettings) -> std::io::Result<()> {

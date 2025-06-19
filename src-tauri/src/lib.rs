@@ -1,26 +1,26 @@
 //! アプリ全体のコマンドや状態管理を行うメインモジュール
-use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
-use tokio::sync::Mutex as AsyncMutex;
-use std::time::Duration;
-use std::collections::HashSet;
-use tokio::process::Command;
-use std::process::Stdio;
 use reqwest::Client;
-use tauri::{async_runtime::spawn, Manager};
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
+use std::process::Stdio;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tauri::{async_runtime::spawn, Manager};
+use tokio::process::Command;
+use tokio::sync::Mutex as AsyncMutex;
 
-mod settings; // 設定関連
-mod lol;      // LoL API ラッパー
-mod obs;      // OBS WebSocket クライアント
-mod ffmpeg;   // ffmpeg 管理
-mod db;       // SQLite アクセス
+mod db;
+mod ffmpeg; // ffmpeg 管理
+mod lol; // LoL API ラッパー
+mod obs; // OBS WebSocket クライアント
+mod settings; // 設定関連 // SQLite アクセス
 
-use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState};
+use db::{cleanup_orphan_clips, get_clip_events, init_db, list_clips, DbPath};
+use ffmpeg::{write_clip_metadata, FfmpegProcess, FfmpegState, SharedFfmpegProcess};
 use lol::{AllGameData, LolEvent};
 use obs::{send_obs_command_wrapper, set_record_directory, ObsWsState, SharedObsWsClient};
-use ffmpeg::{FfmpegProcess, FfmpegState, SharedFfmpegProcess, write_clip_metadata};
-use db::{DbPath, init_db, get_clip_events, list_clips, cleanup_orphan_clips}; // DB 操作用
+use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState}; // DB 操作用
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 enum GameState {
@@ -64,7 +64,10 @@ fn get_status(state: tauri::State<AppStatusState>) -> AppStatus {
 }
 
 #[tauri::command]
-async fn set_recording_mode(state: tauri::State<'_, AppStatusState>, mode: RecordingMode) -> Result<(), String> {
+async fn set_recording_mode(
+    state: tauri::State<'_, AppStatusState>,
+    mode: RecordingMode,
+) -> Result<(), String> {
     let mut lock = state.0.lock().unwrap();
     lock.recording_mode = mode;
 
@@ -143,7 +146,10 @@ async fn start_replay_buffer(
     };
     match mode {
         RecordingMode::Obs => {
-            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StartReplayBuffer")); // OBS 側でリプレイ開始
+            spawn(send_obs_command_wrapper(
+                obs_state.0.clone(),
+                "StartReplayBuffer",
+            )); // OBS 側でリプレイ開始
             Ok(())
         }
         RecordingMode::Shell => {
@@ -170,7 +176,10 @@ async fn stop_replay_buffer(
     };
     match mode {
         RecordingMode::Obs => {
-            spawn(send_obs_command_wrapper(obs_state.0.clone(), "StopReplayBuffer")); // OBS リプレイ停止
+            spawn(send_obs_command_wrapper(
+                obs_state.0.clone(),
+                "StopReplayBuffer",
+            )); // OBS リプレイ停止
             Ok(())
         }
         RecordingMode::Shell => {
@@ -189,7 +198,10 @@ async fn save_replay_buffer(
     let mode = { state.0.lock().unwrap().recording_mode.clone() };
     match mode {
         RecordingMode::Obs => {
-            spawn(send_obs_command_wrapper(obs_state.0.clone(), "SaveReplayBuffer")); // OBS に保存指示
+            spawn(send_obs_command_wrapper(
+                obs_state.0.clone(),
+                "SaveReplayBuffer",
+            )); // OBS に保存指示
             Ok(())
         }
         RecordingMode::Shell => {
@@ -237,7 +249,7 @@ struct SavedVideoInfo {
 
 #[tauri::command]
 async fn list_saved_videos(
-    settings: tauri::State<'_, SettingsState>
+    settings: tauri::State<'_, SettingsState>,
 ) -> Result<Vec<SavedVideoInfo>, String> {
     // DB 内の孤立したレコードをクリーンアップ
     // cleanup_orphan_clips(&db.0).await?;
@@ -278,7 +290,10 @@ async fn list_saved_videos(
 }
 
 #[tauri::command]
-async fn get_clip_metadata(path: String, db: tauri::State<'_, DbPath>) -> Result<Vec<db::EventWithOffset>, String> {
+async fn get_clip_metadata(
+    path: String,
+    db: tauri::State<'_, DbPath>,
+) -> Result<Vec<db::EventWithOffset>, String> {
     get_clip_events(&db.0, std::path::Path::new(&path)).await
 }
 
@@ -327,7 +342,6 @@ async fn start_ffmpeg_replay(
     wrap_count: Option<u32>,
     bitrate: Option<String>,
 ) -> Result<(), String> {
-
     println!("Starting ffmpeg replay buffer with segment_seconds: {:?}, video_source: {:?}, audio_source: {:?}, fps: {:?}, wrap_count: {:?}, bitrate: {:?}", 
         segment_seconds, video_source, audio_source, fps, wrap_count, bitrate);
 
@@ -350,7 +364,7 @@ async fn start_ffmpeg_replay(
     }
 
     let shared = state.0.clone();
-  
+
     if let Some(w) = wrap_count {
         proc.set_wrap_count(w);
     }
@@ -400,19 +414,11 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
     {
         let output = Command::new("ffmpeg")
             .stderr(Stdio::piped())
-            .args([
-                "-f",
-                "avfoundation",
-                "-list_devices",
-                "true",
-                "-i",
-                "",
-            ])
+            .args(["-f", "avfoundation", "-list_devices", "true", "-i", ""])
             .output()
             .await
             .map_err(|e| e.to_string())?;
         if output.status.success() {
-
             // println!("ffmpeg command failed with status: {}", output.status);
             // println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
             // println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
@@ -438,11 +444,17 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
                     match current {
                         Some("video") => {
                             let index = video.len() as i32;
-                            video.push(DeviceInfo { index, name: name.to_string() });
+                            video.push(DeviceInfo {
+                                index,
+                                name: name.to_string(),
+                            });
                         }
                         Some("audio") => {
                             let index = audio.len() as i32;
-                            audio.push(DeviceInfo { index, name: name.to_string() });
+                            audio.push(DeviceInfo {
+                                index,
+                                name: name.to_string(),
+                            });
                         }
                         _ => {}
                     }
@@ -474,7 +486,10 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
             let trimmed = line.trim();
             if trimmed.starts_with("card") {
                 let index = audio.len() as i32;
-                audio.push(DeviceInfo { index, name: trimmed.to_string() });
+                audio.push(DeviceInfo {
+                    index,
+                    name: trimmed.to_string(),
+                });
             }
         }
 
@@ -485,7 +500,10 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
             if !line.starts_with(' ') && !line.starts_with('\t') {
                 let name = line.trim_end_matches(':').trim();
                 let index = video.len() as i32;
-                video.push(DeviceInfo { index, name: name.to_string() });
+                video.push(DeviceInfo {
+                    index,
+                    name: name.to_string(),
+                });
             }
         }
     }
@@ -520,11 +538,17 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
                     match current {
                         Some("video") => {
                             let index = video.len() as i32;
-                            video.push(DeviceInfo { index, name: name.to_string() });
+                            video.push(DeviceInfo {
+                                index,
+                                name: name.to_string(),
+                            });
                         }
                         Some("audio") => {
                             let index = audio.len() as i32;
-                            audio.push(DeviceInfo { index, name: name.to_string() });
+                            audio.push(DeviceInfo {
+                                index,
+                                name: name.to_string(),
+                            });
                         }
                         _ => {}
                     }
@@ -546,8 +570,8 @@ struct AppStatusState(Arc<Mutex<AppStatus>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -788,12 +812,20 @@ where
     println!("Starting LoL event polling...");
 
     loop {
-        match client.get("https://127.0.0.1:2999/liveclientdata/allgamedata").send().await {
+        match client
+            .get("https://127.0.0.1:2999/liveclientdata/allgamedata")
+            .send()
+            .await
+        {
             Ok(response) => {
                 if let Ok(body) = response.text().await {
                     match serde_json::from_str::<AllGameData>(&body) {
                         Ok(all_data) => {
-                            let new_events: Vec<LolEvent> = all_data.clone().events.events.into_iter()
+                            let new_events: Vec<LolEvent> = all_data
+                                .clone()
+                                .events
+                                .events
+                                .into_iter()
                                 .filter(|event| !last_event_ids.contains(&event.EventID))
                                 .collect();
                             if !new_events.is_empty() {
@@ -807,21 +839,28 @@ where
                             // デバッグ用
                             if true {
                                 // JSONを整形して出力
-                                let json_output = serde_json::to_string_pretty(&all_data).unwrap_or_else(|_| "{}".to_string());
+                                let json_output = serde_json::to_string_pretty(&all_data)
+                                    .unwrap_or_else(|_| "{}".to_string());
                                 // 現在の時刻でファイル名を生成、保存
                                 // ディレクトリは~/Documents/LOLReplayに保存
-                                let mut save_dir = dirs::document_dir().unwrap_or_else(|| PathBuf::from("."));
+                                let mut save_dir =
+                                    dirs::document_dir().unwrap_or_else(|| PathBuf::from("."));
                                 save_dir.push("LOLReplay");
                                 if !save_dir.exists() {
                                     std::fs::create_dir_all(&save_dir).unwrap_or_else(|_| {
-                                        eprintln!("Failed to create LOLReplay directory: {:?}", save_dir);
+                                        eprintln!(
+                                            "Failed to create LOLReplay directory: {:?}",
+                                            save_dir
+                                        );
                                     });
                                 }
-                                let file_path = save_dir.join(format!("lol_event_{}.json", chrono::Utc::now().format("%Y%m%d_%H%M%S")));
+                                let file_path = save_dir.join(format!(
+                                    "lol_event_{}.json",
+                                    chrono::Utc::now().format("%Y%m%d_%H%M%S")
+                                ));
                                 std::fs::write(&file_path, json_output).unwrap_or_else(|_| {
                                     eprintln!("Failed to write JSON to file: {:?}", file_path);
                                 });
-                                
                             }
                         }
                         Err(e) => {
@@ -838,4 +877,3 @@ where
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
-

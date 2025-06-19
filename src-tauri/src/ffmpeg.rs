@@ -1,12 +1,12 @@
 //! ffmpeg プロセスを制御するラッパーモジュール
 //! 録画やリプレイバッファをシェルコマンドで実装する
+use std::path::PathBuf;
+use std::process::Child as CommandChild;
+use std::process::Command;
 use std::sync::Arc;
 use tauri::App;
-use tokio::sync::Mutex as AsyncMutex;
-use std::path::PathBuf;
-use std::process::{Command};
-use std::process::Child as CommandChild;
 use tauri::Manager;
+use tokio::sync::Mutex as AsyncMutex;
 // ffmpeg 制御に必要な標準ライブラリと Tauri の型をインポート
 
 use crate::lol::LolEvent;
@@ -293,4 +293,3 @@ pub async fn write_clip_metadata(
     // crate::db::write_clip_metadata(db_path, path, events, clip_start).await
     Ok(())
 }
-

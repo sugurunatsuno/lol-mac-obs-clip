@@ -208,4 +208,3 @@ pub struct GameData {
     pub mapNumber: i32,
     pub mapTerrain: String,
 }
-
