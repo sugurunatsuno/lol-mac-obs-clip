@@ -21,7 +21,7 @@ mod settings; // 設定関連 // SQLite アクセス
 
 use db::{cleanup_orphan_clips, get_clip_events, init_db, list_clips, DbPath};
 use ffmpeg::{write_clip_metadata, FfmpegProcess, FfmpegState, SharedFfmpegProcess};
-use lol::{AllGameData, LolEvent};
+use lol::{AllGameData, LolEvent, Player};
 use obs::{send_obs_command_wrapper, set_record_directory, ObsWsState, SharedObsWsClient};
 use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState}; // DB 操作用
 
@@ -67,6 +67,12 @@ struct AppStatus {
     recording_mode: RecordingMode,
     is_recording: bool,
     replay_buffer_running: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct GamePlayer {
+    name: String,
+    champion: String,
 }
 
 #[tauri::command]
@@ -132,6 +138,22 @@ fn log_message(level: Option<String>, message: String) -> Result<(), String> {
 #[tauri::command]
 fn get_status(state: tauri::State<AppStatusState>) -> AppStatus {
     state.0.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn get_current_players(state: tauri::State<LolDataState>) -> Vec<GamePlayer> {
+    let lock = state.0.lock().unwrap();
+    if let Some(ref data) = *lock {
+        data.allPlayers
+            .iter()
+            .map(|p| GamePlayer {
+                name: p.summonerName.clone(),
+                champion: p.championName.clone(),
+            })
+            .collect()
+    } else {
+        Vec::new()
+    }
 }
 
 #[tauri::command]
@@ -645,6 +667,10 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
 
 /// アプリ状態を共有するためのラッパー
 struct AppStatusState(Arc<Mutex<AppStatus>>);
+/// 最新の LoL ゲームデータを保持するためのラッパー
+
+#[derive(Clone)]
+struct LolDataState(Arc<Mutex<Option<AllGameData>>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -672,6 +698,7 @@ pub fn run() {
             get_clip_metadata,
             load_settings_cmd,
             save_settings_cmd,
+            get_current_players,
             greet,
             show_notification,
             log_message])
@@ -704,6 +731,8 @@ pub fn run() {
             };
             let status = Arc::new(Mutex::new(status));
 
+            let lol_data_state = LolDataState(Arc::new(Mutex::new(None)));
+
             let ffmpeg_process: SharedFfmpegProcess = Arc::new(AsyncMutex::new(ffmpeg_proc));
             let obs_ws_client: SharedObsWsClient = Arc::new(Mutex::new(None));
             let status_clone = status.clone();
@@ -717,6 +746,7 @@ pub fn run() {
             _app.manage(settings_state);
             _app.manage(settings_path_state);
             _app.manage(db_state.clone());
+            _app.manage(lol_data_state.clone());
 
             let dir = settings.save_dir.clone();
             let obs_ws_client_clone2 = obs_ws_client.clone();
@@ -727,9 +757,14 @@ pub fn run() {
             let obs_ws_client_clone = obs_ws_client.clone();
             let ffmpeg_process_clone = ffmpeg_process.clone();
             let db_path_clone = db_state.clone();
+            let lol_data_state_clone = lol_data_state.clone();
 
             tauri::async_runtime::spawn(async move {
                 poll_lol_events(settings_state_clone2, move |all_data: &AllGameData, new_events: Vec<LolEvent>| {
+                    {
+                        let mut lock = lol_data_state_clone.0.lock().unwrap();
+                        *lock = Some(all_data.clone());
+                    }
                     let mut status = status_clone.lock().unwrap();
                     if status.game_state == GameState::NotStarted {
                         status.game_state = GameState::InProgress;
