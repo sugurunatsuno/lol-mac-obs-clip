@@ -10,6 +10,8 @@ use tauri::{async_runtime::spawn, Manager};
 use tokio::process::Command;
 use tokio::sync::Mutex as AsyncMutex;
 use tauri_plugin_notification::NotificationExt;
+use flexi_logger::{Duplicate, FileSpec, Logger};
+use log::{error, info};
 
 mod db;
 mod ffmpeg; // ffmpeg 管理
@@ -22,6 +24,19 @@ use ffmpeg::{write_clip_metadata, FfmpegProcess, FfmpegState, SharedFfmpegProces
 use lol::{AllGameData, LolEvent};
 use obs::{send_obs_command_wrapper, set_record_directory, ObsWsState, SharedObsWsClient};
 use settings::{load_settings, save_settings, AppSettings, SettingsPath, SettingsState}; // DB 操作用
+
+fn init_logging() {
+    let mut dir = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
+    dir.push("lol_clip_tool");
+    std::fs::create_dir_all(&dir).ok();
+    Logger::try_with_env_or_str("info")
+        .unwrap()
+        .log_to_file(FileSpec::default().directory(dir))
+        .duplicate_to_stdout(Duplicate::All)
+        .format(flexi_logger::detailed_format)
+        .start()
+        .unwrap();
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 enum GameState {
@@ -72,7 +87,7 @@ async fn set_recording_mode(
     let mut lock = state.0.lock().unwrap();
     lock.recording_mode = mode;
 
-    println!("Recording mode set to: {:?}", lock.recording_mode);
+    info!("Recording mode set to: {:?}", lock.recording_mode);
     Ok(())
 }
 
@@ -343,8 +358,15 @@ async fn start_ffmpeg_replay(
     wrap_count: Option<u32>,
     bitrate: Option<String>,
 ) -> Result<(), String> {
-    println!("Starting ffmpeg replay buffer with segment_seconds: {:?}, video_source: {:?}, audio_source: {:?}, fps: {:?}, wrap_count: {:?}, bitrate: {:?}", 
-        segment_seconds, video_source, audio_source, fps, wrap_count, bitrate);
+    info!(
+        "Starting ffmpeg replay buffer with segment_seconds: {:?}, video_source: {:?}, audio_source: {:?}, fps: {:?}, wrap_count: {:?}, bitrate: {:?}",
+        segment_seconds,
+        video_source,
+        audio_source,
+        fps,
+        wrap_count,
+        bitrate
+    );
 
     let mut proc = state.0.lock().await;
     {
@@ -571,6 +593,7 @@ struct AppStatusState(Arc<Mutex<AppStatus>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_logging();
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -660,27 +683,46 @@ pub fn run() {
                     for event in new_events {
                         match event.EventName.as_str() {
                             "ChampionKill" => {
-                                println!("{} champion killed: {} by {}", event.EventTime, event.VictimName.as_deref().unwrap_or("Unknown"), event.KillerName.as_deref().unwrap_or("Unknown"));
+                                info!(
+                                    "{} champion killed: {} by {}",
+                                    event.EventTime,
+                                    event.VictimName.as_deref().unwrap_or("Unknown"),
+                                    event.KillerName.as_deref().unwrap_or("Unknown")
+                                );
                             }
                             "Multikill" => {
                                 if let Some(killer_name) = &event.KillerName {
                                     // アクティブプレイヤーの名前がキルしたプレイヤー名に含まれているか確認：うまく取れていない
                                     if !killer_name.contains(all_data.activePlayer.riotIdGameName.as_str()) {
-                                        println!("Killer name does not match active player: {} != {}", killer_name, all_data.activePlayer.riotIdGameName);
+                                        info!(
+                                            "Killer name does not match active player: {} != {}",
+                                            killer_name,
+                                            all_data.activePlayer.riotIdGameName
+                                        );
                                         continue;
                                     }
 
-                                    println!("{} multikill by {}: {}, active_player: {}", event.EventTime, killer_name, event.EventName, all_data.activePlayer.summonerName);
-                                    println!("Game Time: {}, Event Time:{}", all_data.gameData.gameTime, event.EventTime);
+                                    info!(
+                                        "{} multikill by {}: {}, active_player: {}",
+                                        event.EventTime,
+                                        killer_name,
+                                        event.EventName,
+                                        all_data.activePlayer.summonerName
+                                    );
+                                    info!(
+                                        "Game Time: {}, Event Time:{}",
+                                        all_data.gameData.gameTime,
+                                        event.EventTime
+                                    );
 
                                     match mode {
                                         RecordingMode::Obs => {
                                             let obs_client_clone = obs_ws_client_clone.clone();
                                             tauri::async_runtime::spawn(async move {
                                                 if let Err(e) = send_obs_command_wrapper(obs_client_clone, "SaveReplayBuffer").await {
-                                                    eprintln!("Failed to send Multikill command to OBS: {}", e);
+                                                    error!("Failed to send Multikill command to OBS: {}", e);
                                                 } else {
-                                                    println!("Sent Multikill command to OBS");
+                                                    info!("Sent Multikill command to OBS");
                                                 }
                                             });
                                         }
@@ -701,11 +743,11 @@ pub fn run() {
                                                                 .filter(|ev| ev.EventTime >= clip_start)
                                                                 .collect();
                                                             if let Err(e) = write_clip_metadata(&db_path, &path, &relevant_events, clip_start).await {
-                                                                eprintln!("Failed to write metadata: {}", e);
+                                                                error!("Failed to write metadata: {}", e);
                                                             }
                                                         }
                                                         Err(e) => {
-                                                            eprintln!("Failed to save clip: {}", e);
+                                                            error!("Failed to save clip: {}", e);
                                                         }
                                                     }
                                                 }
@@ -717,7 +759,7 @@ pub fn run() {
                             
                             // ゲームスタート時にOBSかffmpegの録画を開始
                             "GameStart" => {
-                                println!("Game started at {}", event.EventTime);
+                                info!("Game started at {}", event.EventTime);
 
                                 // ゲーム状態を更新
                                 let mut status = status_clone.lock().unwrap();
@@ -731,9 +773,9 @@ pub fn run() {
                                         let obs_client_clone = obs_ws_client_clone.clone();
                                         tauri::async_runtime::spawn(async move {
                                             if let Err(e) = send_obs_command_wrapper(obs_client_clone, "StartRecord").await {
-                                                eprintln!("Failed to start OBS recording: {}", e);
+                                                error!("Failed to start OBS recording: {}", e);
                                             } else {
-                                                println!("Started OBS recording");
+                                                info!("Started OBS recording");
                                             }
                                         });
                                     }
@@ -743,9 +785,9 @@ pub fn run() {
                                             let ffmpeg_process_clone = ffmpeg_process_clone.clone();
                                             async move {
                                                 if let Err(e) = ffmpeg_clone.lock().await.start(ffmpeg_process_clone).await {
-                                                    eprintln!("Failed to start ffmpeg recording: {}", e);
+                                                    error!("Failed to start ffmpeg recording: {}", e);
                                                 } else {
-                                                    println!("Started ffmpeg recording");
+                                                    info!("Started ffmpeg recording");
                                                 }
                                             }
                                         });
@@ -755,7 +797,7 @@ pub fn run() {
 
                             // ゲーム終了時にOBSかffmpegの録画を停止
                             "GameEnd" => {
-                                println!("Game ended at {}", event.EventTime);
+                                info!("Game ended at {}", event.EventTime);
 
                                 // ゲーム状態を更新
                                 let mut status = status_clone.lock().unwrap();
@@ -769,9 +811,9 @@ pub fn run() {
                                         let obs_client_clone = obs_ws_client_clone.clone();
                                         tauri::async_runtime::spawn(async move {
                                             if let Err(e) = send_obs_command_wrapper(obs_client_clone, "StopRecord").await {
-                                                eprintln!("Failed to stop OBS recording: {}", e);
+                                                error!("Failed to stop OBS recording: {}", e);
                                             } else {
-                                                println!("Stopped OBS recording");
+                                                info!("Stopped OBS recording");
                                             }
                                         });
                                     }
@@ -779,16 +821,16 @@ pub fn run() {
                                         let ffmpeg_clone = ffmpeg_process_clone.clone();
                                         tauri::async_runtime::spawn(async move {
                                             if let Err(e) = ffmpeg_clone.lock().await.stop().await {
-                                                eprintln!("Failed to stop ffmpeg recording: {}", e);
+                                                error!("Failed to stop ffmpeg recording: {}", e);
                                             } else {
-                                                println!("Stopped ffmpeg recording");
+                                                info!("Stopped ffmpeg recording");
                                             }
                                         });
                                     }
                                 }
                             }
                             _ => {
-                                println!("Unhandled event: {} at {}", event.EventName, event.EventTime);
+                                info!("Unhandled event: {} at {}", event.EventName, event.EventTime);
                             }
                         }
                     }
@@ -822,7 +864,7 @@ where
     let mut seen_event_ids: HashSet<i64> = HashSet::new();
     let mut pending_events: Vec<(LolEvent, f64)> = Vec::new();
 
-    println!("Starting LoL event polling...");
+    info!("Starting LoL event polling...");
 
     loop {
         let delay_secs = {
@@ -858,13 +900,13 @@ where
                             });
 
                             if !ready_events.is_empty() {
-                                println!("Delayed events triggered: {}", ready_events.len());
+                                info!("Delayed events triggered: {}", ready_events.len());
                                 callback(&all_data, ready_events);
                             }
 
                         }
                         Err(e) => {
-                            eprintln!("Failed to parse AllGameData from response: {}", e);
+                            error!("Failed to parse AllGameData from response: {}", e);
                         }
                     }
                 }
