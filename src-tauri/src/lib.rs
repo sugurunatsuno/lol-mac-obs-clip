@@ -95,6 +95,8 @@ pub fn show_notification_no_handle(title: &str, body: &str) -> Result<(), String
 
 fn show_notification_impl(app: Option<tauri::AppHandle>, title: &str, body: &str) -> Result<(), String> {
     if let Some(handle) = app {
+
+        info!("Showing notification: {} - {}", title, body);
         handle
             .notification()
             .builder()
@@ -103,6 +105,8 @@ fn show_notification_impl(app: Option<tauri::AppHandle>, title: &str, body: &str
             .show()
             .map_err(|e| e.to_string())
     } else {
+
+        info!("Showing notification without AppHandle: {} - {}", title, body);
         notify_rust::Notification::new()
             .summary(title)
             .body(body)
