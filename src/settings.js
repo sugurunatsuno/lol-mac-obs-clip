@@ -4,7 +4,8 @@ const { open } = window.__TAURI__.dialog;
 // Tauri API の基本機能を利用
 
 // input 要素から整数値を取得し、最小値チェックを行うユーティリティ
-function getInt(id, min = 1) {
+// 数値入力を整数として取得し、最小値を満たしているか検証
+function parseIntInput(id, min = 1) {
   const el = document.getElementById(id);
   if (!el) return NaN;
   const val = parseInt(el.value, 10);
@@ -14,7 +15,8 @@ function getInt(id, min = 1) {
   return val; // チェックを通過した値を返す
 }
 
-function getFloat(id, min = 0) {
+// 数値入力を浮動小数点として取得し、最小値をチェック
+function parseFloatInput(id, min = 0) {
   const el = document.getElementById(id);
   if (!el) return NaN;
   const val = parseFloat(el.value);
@@ -34,7 +36,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById('modeToggle')?.addEventListener('change', async (e) => {
     const mode = e.target.checked ? 'Shell' : 'Obs';
     await invoke('set_recording_mode', { mode });
-    updateStatus();
+    refreshStatus();
   });
   document.getElementById('btnStart')?.addEventListener('click', async () => {
     try {
@@ -43,7 +45,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     } catch (e) {
       logEvent(`⚠️ 録画開始に失敗しました: ${e}`);
     }
-    updateStatus();
+    refreshStatus();
   });
 
   document.getElementById('btnStop')?.addEventListener('click', async () => {
@@ -53,18 +55,18 @@ window.addEventListener("DOMContentLoaded", async () => {
     } catch (e) {
       logEvent(`⚠️ 録画停止に失敗しました: ${e}`);
     }
-    updateStatus();
+    refreshStatus();
   });
 
   document.getElementById('btnReplayStart')?.addEventListener('click', async () => {
     const isShell = document.getElementById('modeToggle').checked;
     if (isShell) {
       try {
-        const segmentSeconds = getInt('segmentSeconds');
-        const fps = getInt('fpsInput');
+        const segmentSeconds = parseIntInput('segmentSeconds');
+        const fps = parseIntInput('fpsInput');
         const videoSource = document.getElementById('videoSourceInput').value;
         const audioSource = document.getElementById('audioSourceInput').value;
-        const wrapCount = getInt('wrapCountInput');
+        const wrapCount = parseIntInput('wrapCountInput');
         const bitrate = document.getElementById('bitrateInput').value;
         await invoke('start_ffmpeg_replay', { segmentSeconds, fps, videoSource, audioSource, wrapCount, bitrate });
         logEvent("🔁 リプレイバッファを開始しました");
@@ -81,7 +83,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         logEvent(`⚠️ リプレイバッファの開始に失敗しました: ${e}`);
       }
     }
-    updateStatus();
+    refreshStatus();
   });
 
   document.getElementById('btnReplayStop')?.addEventListener('click', async () => {
@@ -96,7 +98,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     } catch (e) {
       logEvent(`⚠️ リプレイバッファの停止に失敗しました: ${e}`);
     }
-    updateStatus();
+    refreshStatus();
   });
 
   document.getElementById('btnReplaySave')?.addEventListener('click', async () => {
@@ -111,7 +113,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     } catch (e) {
       logEvent(`⚠️ リプレイバッファの保存に失敗しました: ${e}`);
     }
-    updateStatus();
+    refreshStatus();
   });
 
   document.getElementById('chooseDirBtn')?.addEventListener('click', async () => {
@@ -132,12 +134,13 @@ window.addEventListener("DOMContentLoaded", async () => {
     await saveSettings();
   });
 
-  setInterval(updateStatus, 1500);
-  updateStatus();
+  setInterval(refreshStatus, 1500);
+  refreshStatus();
 });
 
 // 画面上の状態表示を最新に更新する
-async function updateStatus() {
+// 現在の状態を取得して画面へ反映
+async function refreshStatus() {
   const status = await invoke('get_status');
   const game = document.getElementById('gameState');
   if (game) game.textContent = status.game_state;
@@ -152,7 +155,6 @@ async function updateStatus() {
   if (saveBtn) {
     saveBtn.disabled = !status.replay_buffer_running;
   }
- // updateStatus end
   const dbg = document.getElementById('debugStatus');
   if (dbg) {
     const modeText = status.recording_mode === 'Shell' ? 'ffmpeg' : 'OBS';
@@ -233,11 +235,11 @@ async function saveSettings() {
   const base = await invoke('load_settings_cmd');
   const settings = { ...base };
   try {
-    settings.segment_seconds = getInt('segmentSeconds');
-    settings.fps = getInt('fpsInput');
-    const wrap = getInt('wrapCountInput');
+    settings.segment_seconds = parseIntInput('segmentSeconds');
+    settings.fps = parseIntInput('fpsInput');
+    const wrap = parseIntInput('wrapCountInput');
     settings.wrap_count = wrap;
-    settings.event_trigger_delay = getFloat('eventDelayInput', 0);
+    settings.event_trigger_delay = parseFloatInput('eventDelayInput', 0);
   } catch (e) {
     alert(e.message);
     return;

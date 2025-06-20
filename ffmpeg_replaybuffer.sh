@@ -2,16 +2,16 @@
 # ffmpeg を使った簡易リプレイバッファ録画スクリプト
 set -Eeuo pipefail
 
-# ffmpeg コマンドのパス。環境変数で上書き可能
-FFMPEG_BIN=${FFMPEG_BIN:-ffmpeg}
-# デフォルト設定値を各変数に格納
-FPS=30 BITRATE=20M SRC="1:none" SEG_S=6 WRAP=11 RAM_MB=512 OUT_DIR="$HOME/Movies"
+# ffmpeg コマンドのパス (必要に応じて環境変数で指定)
+FFMPEG_CMD=${FFMPEG_BIN:-ffmpeg}
+# 各種デフォルト設定
+FPS=30 VIDEO_BITRATE=20M SRC="1:none" SEG_SECONDS=6 WRAP=11 RAM_MB=512 OUT_DIR="$HOME/Movies"
 
 # コマンドライン引数の解析
 while getopts "f:b:s:t:n:r:o:h" o; do
   case $o in
-    f) FPS=$OPTARG ;; b) BITRATE=$OPTARG ;;
-    s) SRC=$OPTARG ;; t) SEG_S=$OPTARG ;;
+    f) FPS=$OPTARG ;; b) VIDEO_BITRATE=$OPTARG ;;
+    s) SRC=$OPTARG ;; t) SEG_SECONDS=$OPTARG ;;
     n) WRAP=$OPTARG ;; r) RAM_MB=$OPTARG ;;
     o) OUT_DIR=$OPTARG ;;
     h|*) echo "usage: $0 [-f fps] [-b bitrate] [-s src] [-t seg_sec] [-n wrap] [-r ram_mb] [-o out_dir]"; exit 0;;
@@ -19,7 +19,7 @@ while getopts "f:b:s:t:n:r:o:h" o; do
 done
 
 # GOP 長やバッファ長などの内部パラメータを計算
-GOP=$((FPS*SEG_S)) OFFSET=$((-(WRAP-1))) DUR=$((SEG_S*(WRAP-1)))
+GOP=$((FPS*SEG_SECONDS)) OFFSET=$((-(WRAP-1))) DUR=$((SEG_SECONDS*(WRAP-1)))
 BLOCKS=$((RAM_MB*2048))
 # RAM ディスクを作成して一時録画用ディレクトリを用意
 DEV=$(hdiutil attach -nomount "ram://$BLOCKS" | tr -d '[:space:]')
@@ -41,12 +41,12 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # ffmpeg をバックグラウンド実行し循環バッファを構築
-"$FFMPEG_BIN" -f avfoundation -pixel_format nv12 -framerate $((FPS*2)) -i "$SRC" \
+"$FFMPEG_CMD" -f avfoundation -pixel_format nv12 -framerate $((FPS*2)) -i "$SRC" \
   -vf "fps=$FPS,format=yuv420p" \
-  -c:v h264_videotoolbox -realtime 1 -bf 0 -b:v "$BITRATE" \
+  -c:v h264_videotoolbox -realtime 1 -bf 0 -b:v "$VIDEO_BITRATE" \
   -g "$GOP" -keyint_min "$GOP" -sc_threshold 0 \
-  -force_key_frames "expr:gte(t,n_forced*${SEG_S}-0.1)" -an \
-  -f segment -segment_time "$SEG_S" -segment_format ts \
+  -force_key_frames "expr:gte(t,n_forced*${SEG_SECONDS}-0.1)" -an \
+  -f segment -segment_time "$SEG_SECONDS" -segment_format ts \
   -segment_wrap "$WRAP" -segment_list "$DIR/list.m3u8" \
   -segment_list_size "$WRAP" -segment_list_type m3u8 \
   -segment_list_flags +live "$DIR/seg%03d.ts" & FF_PID=$!
