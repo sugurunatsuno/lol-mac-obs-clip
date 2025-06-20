@@ -11,6 +11,7 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use crate::lol::LolEvent;
 use tokio::fs;
+use log::info;
 
 fn default_save_dir_path() -> PathBuf {
     // ホームディレクトリ直下の Movies フォルダを利用
@@ -96,7 +97,7 @@ impl FfmpegProcess {
     }
 
     pub fn set_save_dir(&mut self, dir: PathBuf) {
-        println!("Set save directory to {:?}", dir);
+        info!("Set save directory to {:?}", dir);
         // クリップ保存先ディレクトリ
         self.save_dir = dir;
     }
@@ -107,10 +108,10 @@ impl FfmpegProcess {
         // 既に動いている場合は何もしない
         if let Some(process) = self.process.as_mut() {
             if process.try_wait().map_err(|e| e.to_string())?.is_none() {
-                println!("ffmpeg process already running");
+                info!("ffmpeg process already running");
                 return Ok(());
             }
-            println!("ffmpeg process was stopped, restarting");
+            info!("ffmpeg process was stopped, restarting");
         }
 
         if self.process.is_some() {
@@ -121,9 +122,13 @@ impl FfmpegProcess {
 
         // セグメント保存用ディレクトリを作成
         let dir = PathBuf::from("/tmp/lol_obs_clip/replay");
-        println!(
+        info!(
             "Creating segment directory {:?} (segment_seconds={}, wrap_count={}, fps={}, bitrate={})",
-            dir, self.segment_seconds, self.wrap_count, self.fps, self.bitrate
+            dir,
+            self.segment_seconds,
+            self.wrap_count,
+            self.fps,
+            self.bitrate
         );
         if dir.exists() {
             fs::remove_dir_all(&dir).await.map_err(|e| e.to_string())?;
@@ -177,7 +182,7 @@ impl FfmpegProcess {
         args.push("-segment_list_flags".into());
         args.push("+live".into());
         args.push(dir.join("seg%03d.ts").to_string_lossy().into_owned());
-        println!("Running ffmpeg command: {:?} {:?}", self.ffmpeg_path, args);
+        info!("Running ffmpeg command: {:?} {:?}", self.ffmpeg_path, args);
         let child = Command::new(&self.ffmpeg_path)
             .args(&args)
             .spawn() // ffmpeg プロセス開始
@@ -208,14 +213,14 @@ impl FfmpegProcess {
                 }
                 if fs::metadata(&save_path).await.is_ok() {
                     // .trigger_save を検知したらバッファを保存
-                    println!("Save trigger detected, saving current buffer");
+                    info!("Save trigger detected, saving current buffer");
                     let _ = fs::remove_file(&save_path).await;
                     let mut p = shared.lock().await;
                     let _ = p.save().await;
                 }
                 if fs::metadata(&quit_path).await.is_ok() {
                     // .trigger_quit を検知したらプロセスを終了
-                    println!("Quit trigger detected, stopping ffmpeg process");
+                    info!("Quit trigger detected, stopping ffmpeg process");
                     let _ = fs::remove_file(&quit_path).await;
                     let mut p = shared.lock().await;
                     let _ = p.stop().await;
@@ -231,7 +236,7 @@ impl FfmpegProcess {
     pub async fn stop(&mut self) -> Result<(), String> {
         // ffmpeg プロセスと一時ディレクトリを後始末
         if let Some(mut child) = self.process.take() {
-            println!("Stopping ffmpeg process");
+            info!("Stopping ffmpeg process");
             let _ = child.kill(); // プロセス終了を試みる
             let _ = child.wait(); // ゾンビ化を防ぐために待機
         }
@@ -261,9 +266,11 @@ impl FfmpegProcess {
         out.push(format!("replay_{}.mp4", ts)); // 保存先ファイル名を決定
 
         // ffmpeg を呼び出してクリップを出力
-        println!(
+        info!(
             "Saving replay buffer to {:?} (offset={}, duration={})",
-            out, offset, dur
+            out,
+            offset,
+            dur
         );
         let output = Command::new(&self.ffmpeg_path)
             .args([
@@ -288,7 +295,7 @@ impl FfmpegProcess {
             return Err(String::from_utf8_lossy(&output.stderr).to_string());
         }
 
-        println!("Saved clip to {:?}", out);
+        info!("Saved clip to {:?}", out);
         // 正常終了した場合は保存先パスを返す
 
         Ok(out)
