@@ -668,6 +668,8 @@ async fn list_ffmpeg_devices() -> Result<DeviceList, String> {
 /// アプリ状態を共有するためのラッパー
 struct AppStatusState(Arc<Mutex<AppStatus>>);
 /// 最新の LoL ゲームデータを保持するためのラッパー
+
+#[derive(Clone)]
 struct LolDataState(Arc<Mutex<Option<AllGameData>>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
