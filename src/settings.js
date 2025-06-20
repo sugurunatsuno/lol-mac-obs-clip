@@ -177,6 +177,8 @@ function logEvent(message) {
   } else {
     console.log(message);
   }
+  // also send to Rust side log file
+  invoke('log_message', { level: 'info', message }).catch(() => {});
 }
 
 // 設定ファイルを読み込んでフォームに反映

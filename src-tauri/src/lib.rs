@@ -11,7 +11,7 @@ use tokio::process::Command;
 use tokio::sync::Mutex as AsyncMutex;
 use tauri_plugin_notification::NotificationExt;
 use flexi_logger::{Duplicate, FileSpec, Logger};
-use log::{error, info};
+use log::{debug, error, info, trace, warn};
 
 mod db;
 mod ffmpeg; // ffmpeg 管理
@@ -72,6 +72,18 @@ struct AppStatus {
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[tauri::command]
+fn log_message(level: Option<String>, message: String) -> Result<(), String> {
+    match level.as_deref().unwrap_or("info") {
+        "error" => error!("{}", message),
+        "warn" | "warning" => warn!("{}", message),
+        "debug" => debug!("{}", message),
+        "trace" => trace!("{}", message),
+        _ => info!("{}", message),
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -617,7 +629,8 @@ pub fn run() {
             get_clip_metadata,
             load_settings_cmd,
             save_settings_cmd,
-            greet])
+            greet,
+            log_message])
         .setup( |_app| {
 
             let config_path = _app.path().config_dir().unwrap().join("settings.json");
