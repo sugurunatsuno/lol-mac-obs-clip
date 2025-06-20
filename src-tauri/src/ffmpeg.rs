@@ -21,10 +21,15 @@ fn default_save_dir_path() -> PathBuf {
 
 /// ffmpeg コマンド実行の状態を保持
 /// RAM ディスクやバッファ設定もここで管理する
+/// ffmpeg プロセスとそのパラメータを保持する構造体
 pub struct FfmpegProcess {
-    pub child: Option<CommandChild>,
-    pub ram_device: Option<String>,
-    pub ram_dir: Option<PathBuf>,
+    /// 実行中の ffmpeg プロセス
+    pub process: Option<CommandChild>,
+    /// RAM ディスクのデバイス名 (macOS のみ)
+    pub ram_device_id: Option<String>,
+    /// 一時セグメントを保存しているディレクトリ
+    pub buffer_dir: Option<PathBuf>,
+    /// 利用する ffmpeg バイナリへのパス
     pub ffmpeg_path: PathBuf,
     pub segment_seconds: u32,
     pub video_source: String,
@@ -40,9 +45,9 @@ impl FfmpegProcess {
     pub fn new(ffmpeg_path: PathBuf) -> Self {
         // デフォルト値を設定して初期化
         Self {
-            child: None,
-            ram_device: None,
-            ram_dir: None,
+            process: None,
+            ram_device_id: None,
+            buffer_dir: None,
             ffmpeg_path,
             segment_seconds: 6,
             video_source: "1".into(),
@@ -100,15 +105,15 @@ impl FfmpegProcess {
     pub async fn start(&mut self, shared: SharedFfmpegProcess) -> Result<(), String> {
         // ffmpeg プロセスを起動し循環バッファを構築
         // 既に動いている場合は何もしない
-        if let Some(child) = self.child.as_mut() {
-            if child.try_wait().map_err(|e| e.to_string())?.is_none() {
+        if let Some(process) = self.process.as_mut() {
+            if process.try_wait().map_err(|e| e.to_string())?.is_none() {
                 println!("ffmpeg process already running");
                 return Ok(());
             }
             println!("ffmpeg process was stopped, restarting");
         }
 
-        if self.child.is_some() {
+        if self.process.is_some() {
             self.stop().await?;
         }
         const WRAP: u32 = 11;
@@ -178,10 +183,11 @@ impl FfmpegProcess {
             .spawn() // ffmpeg プロセス開始
             .map_err(|e| e.to_string())?;
 
-        self.child = Some(child);
-        // プロセスハンドルを保存しておく
+        // プロセスハンドルを保存
+        self.process = Some(child);
 
-        self.ram_dir = Some(dir.clone());
+        // 一時セグメント保存用ディレクトリを記録
+        self.buffer_dir = Some(dir.clone());
         // 一時保存用ディレクトリのパス
 
         let save_path = dir.join(".trigger_save");
@@ -196,7 +202,7 @@ impl FfmpegProcess {
                 }
                 {
                     let p = shared.lock().await;
-                    if p.child.is_none() {
+                    if p.process.is_none() {
                         break;
                     }
                 }
@@ -224,24 +230,24 @@ impl FfmpegProcess {
 
     pub async fn stop(&mut self) -> Result<(), String> {
         // ffmpeg プロセスと一時ディレクトリを後始末
-        if let Some(mut child) = self.child.take() {
+        if let Some(mut child) = self.process.take() {
             println!("Stopping ffmpeg process");
             let _ = child.kill(); // プロセス終了を試みる
             let _ = child.wait(); // ゾンビ化を防ぐために待機
         }
-        if let Some(dir) = &self.ram_dir {
+        if let Some(dir) = &self.buffer_dir {
             // 作成した一時ディレクトリを削除
             let _ = fs::remove_dir_all(dir).await;
         }
-        self.ram_device = None;
-        self.ram_dir = None;
+        self.ram_device_id = None;
+        self.buffer_dir = None;
         Ok(())
     }
 
     pub async fn save(&mut self) -> Result<PathBuf, String> {
         // 現在のバッファ内容を mp4 として保存
 
-        let dir = if let Some(d) = &self.ram_dir {
+        let dir = if let Some(d) = &self.buffer_dir {
             d.clone()
         } else {
             return Err("ffmpeg not running".into());
