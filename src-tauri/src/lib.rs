@@ -74,6 +74,44 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+/// Shows a desktop notification.
+///
+/// When called as a Tauri command the [`AppHandle`] parameter is automatically
+/// supplied by the runtime so the JS side does not pass it.
+///
+/// If you want to trigger a notification from Rust code where the `AppHandle`
+/// is not available, call [`show_notification_no_handle`] instead.
+#[tauri::command]
+fn show_notification(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    show_notification_impl(Some(app), &title, &body)
+}
+
+/// Alternative notification function that does not require an [`AppHandle`].
+/// This falls back to `notify_rust` so the icon may differ from the Tauri
+/// plugin version.
+pub fn show_notification_no_handle(title: &str, body: &str) -> Result<(), String> {
+    show_notification_impl(None, title, body)
+}
+
+fn show_notification_impl(app: Option<tauri::AppHandle>, title: &str, body: &str) -> Result<(), String> {
+    if let Some(handle) = app {
+        handle
+            .notification()
+            .builder()
+            .title(title)
+            .body(body)
+            .show()
+            .map_err(|e| e.to_string())
+    } else {
+        notify_rust::Notification::new()
+            .summary(title)
+            .body(body)
+            .show()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+}
+
 #[tauri::command]
 fn get_status(state: tauri::State<AppStatusState>) -> AppStatus {
     state.0.lock().unwrap().clone()
@@ -617,7 +655,8 @@ pub fn run() {
             get_clip_metadata,
             load_settings_cmd,
             save_settings_cmd,
-            greet])
+            greet,
+            show_notification])
         .setup( |_app| {
 
             let config_path = _app.path().config_dir().unwrap().join("settings.json");

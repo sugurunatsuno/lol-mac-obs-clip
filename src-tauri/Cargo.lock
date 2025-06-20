@@ -2104,6 +2104,7 @@ dependencies = [
  "flexi_logger",
  "futures-util",
  "log",
+ "notify-rust",
  "reqwest",
  "serde",
  "serde_json",
