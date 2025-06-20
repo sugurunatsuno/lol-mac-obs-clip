@@ -139,8 +139,10 @@ window.addEventListener("DOMContentLoaded", async () => {
 // 画面上の状態表示を最新に更新する
 async function updateStatus() {
   const status = await invoke('get_status');
-  document.getElementById('gameState').textContent = status.game_state;
-  document.getElementById('obsState').textContent = status.obs_state;
+  const game = document.getElementById('gameState');
+  if (game) game.textContent = status.game_state;
+  const obs = document.getElementById('obsState');
+  if (obs) obs.textContent = status.obs_state;
   const toggle = document.getElementById('modeToggle');
   if (toggle) {
     toggle.checked = status.recording_mode === 'Shell';
@@ -166,9 +168,13 @@ async function updateStatus() {
 // 画面のログ欄へテキストを追加
 function logEvent(message) {
   const log = document.getElementById('eventLog');
-  const entry = document.createElement('li');
-  entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-  log.prepend(entry);
+  if (log) {
+    const entry = document.createElement('li');
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    log.prepend(entry);
+  } else {
+    console.log(message);
+  }
 }
 
 // 設定ファイルを読み込んでフォームに反映
