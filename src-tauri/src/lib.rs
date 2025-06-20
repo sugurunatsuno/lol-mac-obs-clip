@@ -11,7 +11,7 @@ use tokio::process::Command;
 use tokio::sync::Mutex as AsyncMutex;
 use tauri_plugin_notification::NotificationExt;
 use flexi_logger::{Duplicate, FileSpec, Logger};
-use log::{error, info};
+use log::{debug, error, info, trace, warn};
 
 mod db;
 mod ffmpeg; // ffmpeg 管理
@@ -114,6 +114,19 @@ fn show_notification_impl(app: Option<tauri::AppHandle>, title: &str, body: &str
             .map(|_| ())
             .map_err(|e| e.to_string())
     }
+}
+
+
+#[tauri::command]
+fn log_message(level: Option<String>, message: String) -> Result<(), String> {
+    match level.as_deref().unwrap_or("info") {
+        "error" => error!("{}", message),
+        "warn" | "warning" => warn!("{}", message),
+        "debug" => debug!("{}", message),
+        "trace" => trace!("{}", message),
+        _ => info!("{}", message),
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -660,7 +673,8 @@ pub fn run() {
             load_settings_cmd,
             save_settings_cmd,
             greet,
-            show_notification])
+            show_notification,
+            log_message])
         .setup( |_app| {
 
             let config_path = _app.path().config_dir().unwrap().join("settings.json");
