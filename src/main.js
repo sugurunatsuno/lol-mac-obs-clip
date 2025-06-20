@@ -1,6 +1,15 @@
 // エントリーポイント用のJSファイル
-// 現時点では特別な処理をしていないが、将来的な拡張を見据えて残してある
+// 通知テストボタンのクリックで Rust 側コマンドを呼び出すサンプル
+const { invoke } = window.__TAURI__.core;
+
 window.addEventListener("DOMContentLoaded", () => {
-  // 動的な処理が必要になった場合はここに追記する
-  // 例: 初期化コードやイベントリスナー登録
+  const btn = document.getElementById("notifyTestBtn");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      invoke("show_notification", {
+        title: "テスト通知",
+        body: "JS から呼び出しました",
+      });
+    });
+  }
 }); // DOM 準備完了後に実行
