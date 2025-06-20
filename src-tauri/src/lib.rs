@@ -116,6 +116,7 @@ fn show_notification_impl(app: Option<tauri::AppHandle>, title: &str, body: &str
     }
 }
 
+
 #[tauri::command]
 fn log_message(level: Option<String>, message: String) -> Result<(), String> {
     match level.as_deref().unwrap_or("info") {
