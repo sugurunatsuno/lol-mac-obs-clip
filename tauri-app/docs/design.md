@@ -39,8 +39,7 @@
 
 ## 5. 画面構成
 - `index.html` : ホーム画面。モード選択リンクのみ【F:src/index.html†L1-L27】。
-- `obs.html` : OBS 録画向け操作画面【F:src/obs.html†L13-L60】。
-- `ffmpeg.html` : ffmpeg 録画向け操作画面。デバイス設定入力欄を持つ【F:src/ffmpeg.html†L24-L71】。
+- `obs.html` : OBS 録画向け操作画面【F:src/obs.html†L13-L53】。
 - `videos.html` : 保存済み動画一覧を表示【F:src/videos.html†L1-L35】。
 - `video.html` : 動画再生とイベント表示【F:src/video.html†L1-L32】。
 

@@ -11,6 +11,7 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use crate::lol::LolEvent;
 use tokio::fs;
+use log::info;
 
 fn default_save_dir_path() -> PathBuf {
     // ホームディレクトリ直下の Movies フォルダを利用
@@ -21,10 +22,15 @@ fn default_save_dir_path() -> PathBuf {
 
 /// ffmpeg コマンド実行の状態を保持
 /// RAM ディスクやバッファ設定もここで管理する
+/// ffmpeg プロセスとそのパラメータを保持する構造体
 pub struct FfmpegProcess {
-    pub child: Option<CommandChild>,
-    pub ram_device: Option<String>,
-    pub ram_dir: Option<PathBuf>,
+    /// 実行中の ffmpeg プロセス
+    pub process: Option<CommandChild>,
+    /// RAM ディスクのデバイス名 (macOS のみ)
+    pub ram_device_id: Option<String>,
+    /// 一時セグメントを保存しているディレクトリ
+    pub buffer_dir: Option<PathBuf>,
+    /// 利用する ffmpeg バイナリへのパス
     pub ffmpeg_path: PathBuf,
     pub segment_seconds: u32,
     pub video_source: String,
@@ -40,9 +46,9 @@ impl FfmpegProcess {
     pub fn new(ffmpeg_path: PathBuf) -> Self {
         // デフォルト値を設定して初期化
         Self {
-            child: None,
-            ram_device: None,
-            ram_dir: None,
+            process: None,
+            ram_device_id: None,
+            buffer_dir: None,
             ffmpeg_path,
             segment_seconds: 6,
             video_source: "1".into(),
@@ -91,7 +97,7 @@ impl FfmpegProcess {
     }
 
     pub fn set_save_dir(&mut self, dir: PathBuf) {
-        println!("Set save directory to {:?}", dir);
+        info!("Set save directory to {:?}", dir);
         // クリップ保存先ディレクトリ
         self.save_dir = dir;
     }
@@ -100,15 +106,15 @@ impl FfmpegProcess {
     pub async fn start(&mut self, shared: SharedFfmpegProcess) -> Result<(), String> {
         // ffmpeg プロセスを起動し循環バッファを構築
         // 既に動いている場合は何もしない
-        if let Some(child) = self.child.as_mut() {
-            if child.try_wait().map_err(|e| e.to_string())?.is_none() {
-                println!("ffmpeg process already running");
+        if let Some(process) = self.process.as_mut() {
+            if process.try_wait().map_err(|e| e.to_string())?.is_none() {
+                info!("ffmpeg process already running");
                 return Ok(());
             }
-            println!("ffmpeg process was stopped, restarting");
+            info!("ffmpeg process was stopped, restarting");
         }
 
-        if self.child.is_some() {
+        if self.process.is_some() {
             self.stop().await?;
         }
         const WRAP: u32 = 11;
@@ -116,9 +122,13 @@ impl FfmpegProcess {
 
         // セグメント保存用ディレクトリを作成
         let dir = PathBuf::from("/tmp/lol_obs_clip/replay");
-        println!(
+        info!(
             "Creating segment directory {:?} (segment_seconds={}, wrap_count={}, fps={}, bitrate={})",
-            dir, self.segment_seconds, self.wrap_count, self.fps, self.bitrate
+            dir,
+            self.segment_seconds,
+            self.wrap_count,
+            self.fps,
+            self.bitrate
         );
         if dir.exists() {
             fs::remove_dir_all(&dir).await.map_err(|e| e.to_string())?;
@@ -172,16 +182,17 @@ impl FfmpegProcess {
         args.push("-segment_list_flags".into());
         args.push("+live".into());
         args.push(dir.join("seg%03d.ts").to_string_lossy().into_owned());
-        println!("Running ffmpeg command: {:?} {:?}", self.ffmpeg_path, args);
+        info!("Running ffmpeg command: {:?} {:?}", self.ffmpeg_path, args);
         let child = Command::new(&self.ffmpeg_path)
             .args(&args)
             .spawn() // ffmpeg プロセス開始
             .map_err(|e| e.to_string())?;
 
-        self.child = Some(child);
-        // プロセスハンドルを保存しておく
+        // プロセスハンドルを保存
+        self.process = Some(child);
 
-        self.ram_dir = Some(dir.clone());
+        // 一時セグメント保存用ディレクトリを記録
+        self.buffer_dir = Some(dir.clone());
         // 一時保存用ディレクトリのパス
 
         let save_path = dir.join(".trigger_save");
@@ -196,20 +207,20 @@ impl FfmpegProcess {
                 }
                 {
                     let p = shared.lock().await;
-                    if p.child.is_none() {
+                    if p.process.is_none() {
                         break;
                     }
                 }
                 if fs::metadata(&save_path).await.is_ok() {
                     // .trigger_save を検知したらバッファを保存
-                    println!("Save trigger detected, saving current buffer");
+                    info!("Save trigger detected, saving current buffer");
                     let _ = fs::remove_file(&save_path).await;
                     let mut p = shared.lock().await;
                     let _ = p.save().await;
                 }
                 if fs::metadata(&quit_path).await.is_ok() {
                     // .trigger_quit を検知したらプロセスを終了
-                    println!("Quit trigger detected, stopping ffmpeg process");
+                    info!("Quit trigger detected, stopping ffmpeg process");
                     let _ = fs::remove_file(&quit_path).await;
                     let mut p = shared.lock().await;
                     let _ = p.stop().await;
@@ -224,24 +235,24 @@ impl FfmpegProcess {
 
     pub async fn stop(&mut self) -> Result<(), String> {
         // ffmpeg プロセスと一時ディレクトリを後始末
-        if let Some(mut child) = self.child.take() {
-            println!("Stopping ffmpeg process");
+        if let Some(mut child) = self.process.take() {
+            info!("Stopping ffmpeg process");
             let _ = child.kill(); // プロセス終了を試みる
             let _ = child.wait(); // ゾンビ化を防ぐために待機
         }
-        if let Some(dir) = &self.ram_dir {
+        if let Some(dir) = &self.buffer_dir {
             // 作成した一時ディレクトリを削除
             let _ = fs::remove_dir_all(dir).await;
         }
-        self.ram_device = None;
-        self.ram_dir = None;
+        self.ram_device_id = None;
+        self.buffer_dir = None;
         Ok(())
     }
 
     pub async fn save(&mut self) -> Result<PathBuf, String> {
         // 現在のバッファ内容を mp4 として保存
 
-        let dir = if let Some(d) = &self.ram_dir {
+        let dir = if let Some(d) = &self.buffer_dir {
             d.clone()
         } else {
             return Err("ffmpeg not running".into());
@@ -255,9 +266,11 @@ impl FfmpegProcess {
         out.push(format!("replay_{}.mp4", ts)); // 保存先ファイル名を決定
 
         // ffmpeg を呼び出してクリップを出力
-        println!(
+        info!(
             "Saving replay buffer to {:?} (offset={}, duration={})",
-            out, offset, dur
+            out,
+            offset,
+            dur
         );
         let output = Command::new(&self.ffmpeg_path)
             .args([
@@ -282,7 +295,7 @@ impl FfmpegProcess {
             return Err(String::from_utf8_lossy(&output.stderr).to_string());
         }
 
-        println!("Saved clip to {:?}", out);
+        info!("Saved clip to {:?}", out);
         // 正常終了した場合は保存先パスを返す
 
         Ok(out)
